@@ -1,13 +1,57 @@
 import React, { useState } from 'react';
 import { Percent, Save, Plus, Trash2, CheckCircle, Calculator, Info } from 'lucide-react';
-import { initialProducts, initialPromoters } from '../mockData';
+import { initialProducts, initialPromoters, initialEmployees, GEOGRAPHY } from '../mockData';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 
+// HUDDO-UPDATE: Commissions — Added City, State, Country columns to employee commission ledger and renamed manager terms to employee
 export default function Commissions({ showToast }) {
   const [products, setProducts] = useState(initialProducts);
   const [promoters, setPromoters] = useState(initialPromoters);
-  const [activeSubTab, setActiveSubTab] = useState('retailer'); // retailer | manager | promoter
-  const [managerRoleTab, setManagerRoleTab] = useState('city'); // city | state | country
+  const [activeSubTab, setActiveSubTab] = useState('retailer'); // retailer | employee | promoter
+  const [employeeRoleTab, setEmployeeRoleTab] = useState('city'); // city | state | country
+
+  // Helper to resolve employee distribution details from Geography
+  const getEmployeeGeography = (employeeName) => {
+    const cityMatch = GEOGRAPHY.cities.find(c => c.manager && c.manager.toLowerCase() === employeeName.toLowerCase());
+    if (cityMatch) {
+      const stateMatch = GEOGRAPHY.states.find(s => s.name === cityMatch.state);
+      return { city: cityMatch.name, state: cityMatch.state, country: stateMatch ? stateMatch.country : 'India' };
+    }
+    const stateMatch = GEOGRAPHY.states.find(s => s.manager && s.manager.toLowerCase() === employeeName.toLowerCase());
+    if (stateMatch) {
+      return { city: 'N/A', state: stateMatch.name, country: stateMatch.country };
+    }
+    const countryMatch = GEOGRAPHY.countries.find(c => c.manager && c.manager.toLowerCase() === employeeName.toLowerCase());
+    if (countryMatch) {
+      return { city: 'N/A', state: 'N/A', country: countryMatch.name };
+    }
+    const emp = initialEmployees.find(e => e.name.toLowerCase() === employeeName.toLowerCase());
+    if (emp && emp.manager) {
+      return getEmployeeGeography(emp.manager);
+    }
+    return { city: 'N/A', state: 'N/A', country: 'India' };
+  };
+
+  const commissionEmployees = [
+    { name: "Rajesh Sharma", role: "Country Manager", revenue: 12450000, level: 'country' },
+    { name: "Preeti Verma", role: "State Manager", revenue: 3200000, level: 'state' },
+    { name: "Anil Deshmukh", role: "State Manager", revenue: 4500000, level: 'state' },
+    { name: "Sanjay Joshi", role: "City Manager", revenue: 2800000, level: 'city' },
+    { name: "Rahul Shinde", role: "City Manager", revenue: 1700000, level: 'city' },
+    { name: "Amit Kumar", role: "Sales Executive", revenue: 950000, level: 'city' }
+  ];
+
+  const calculateEmployeeIncentive = (level, revenue) => {
+    const roleSlabs = slabs[level] || [];
+    let earnedPct = 0;
+    for (let slab of roleSlabs) {
+      if (revenue >= slab.from && revenue <= (slab.to || Infinity)) {
+        earnedPct = slab.pct;
+        break;
+      }
+    }
+    return Math.round(revenue * (earnedPct / 100));
+  };
 
   // Slabs state for Manager Incentives
   const [slabs, setSlabs] = useState({
@@ -54,12 +98,12 @@ export default function Commissions({ showToast }) {
   };
 
   const handleSaveSlabs = () => {
-    showToast("Manager incentive slab structures updated.", "success");
+    showToast("Employee incentive slab structures updated.", "success");
   };
 
   const handleCalculatePreview = () => {
     const inputAmount = Number(previewVal);
-    const roleSlabs = slabs[managerRoleTab];
+    const roleSlabs = slabs[employeeRoleTab];
     let earnedPct = 0;
     
     // Find matching slab
@@ -103,7 +147,7 @@ export default function Commissions({ showToast }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 font-display">Commission & Incentives</h1>
-          <p className="text-sm text-slate-500">Configure retail trade margins, setup regional manager slab systems, and settle promoter royalties.</p>
+          <p className="text-sm text-slate-500">Configure retail trade margins, setup regional employee slab systems, and settle promoter royalties.</p>
         </div>
       </div>
 
@@ -116,10 +160,10 @@ export default function Commissions({ showToast }) {
           1. Retailer Trade Margins
         </button>
         <button 
-          onClick={() => setActiveSubTab('manager')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeSubTab === 'manager' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          onClick={() => setActiveSubTab('employee')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeSubTab === 'employee' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          2. Manager Incentive Slabs
+          2. Employee Incentive Slabs
         </button>
         <button 
           onClick={() => setActiveSubTab('promoter')}
@@ -177,15 +221,15 @@ export default function Commissions({ showToast }) {
         </div>
       )}
 
-      {/* Section 2: Manager Incentives */}
-      {activeSubTab === 'manager' && (
+      {/* Section 2: Employee Incentives */}
+      {activeSubTab === 'employee' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Slabs configure panel */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 font-display">Incentive Commission Slabs Configuration</h3>
-                <p className="text-xs text-slate-400 font-semibold">Map payout ratios to sales volumes brackets reached by regional managers.</p>
+                <p className="text-xs text-slate-400 font-semibold">Map payout ratios to sales volumes brackets reached by regional employees.</p>
               </div>
               <button 
                 onClick={handleSaveSlabs}
@@ -196,19 +240,19 @@ export default function Commissions({ showToast }) {
               </button>
             </div>
 
-            {/* Manager sub-tabs */}
+            {/* Employee sub-tabs */}
             <div className="flex gap-2 border-b border-slate-100 pb-2">
               {['city', 'state', 'country'].map(role => (
                 <button
                   key={role}
-                  onClick={() => { setManagerRoleTab(role); setCalculatedReward(null); }}
+                  onClick={() => { setEmployeeRoleTab(role); setCalculatedReward(null); }}
                   className={`px-3 py-1 text-xs font-bold rounded-lg border uppercase transition-all ${
-                    managerRoleTab === role 
+                    employeeRoleTab === role 
                       ? 'bg-slate-900 text-white border-slate-900' 
                       : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                   }`}
                 >
-                  {role} Manager
+                  {role.charAt(0).toUpperCase() + role.slice(1)} Employee
                 </button>
               ))}
             </div>
@@ -217,8 +261,8 @@ export default function Commissions({ showToast }) {
             <div className="flex items-center gap-4 text-xs font-semibold text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">
               <span>Performance Calculation Based On:</span>
               <select 
-                value={incentiveType[managerRoleTab]}
-                onChange={(e) => setIncentiveType({ ...incentiveType, [managerRoleTab]: e.target.value })}
+                value={incentiveType[employeeRoleTab]}
+                onChange={(e) => setIncentiveType({ ...incentiveType, [employeeRoleTab]: e.target.value })}
                 className="border border-slate-200 rounded p-1 bg-white focus:outline-none"
               >
                 <option value="Sales Volume">Sales Volume (₹ Amount)</option>
@@ -229,7 +273,7 @@ export default function Commissions({ showToast }) {
 
             {/* Slabs Editor table */}
             <div className="space-y-3">
-              {slabs[managerRoleTab].map((slab, index) => (
+              {slabs[employeeRoleTab].map((slab, index) => (
                 <div key={index} className="flex gap-3 items-center">
                   <div className="flex-1">
                     <label className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">From</label>
@@ -237,7 +281,7 @@ export default function Commissions({ showToast }) {
                       type="number"
                       placeholder="0"
                       value={slab.from}
-                      onChange={(e) => handleSlabChange(managerRoleTab, index, 'from', e.target.value)}
+                      onChange={(e) => handleSlabChange(employeeRoleTab, index, 'from', e.target.value)}
                       className="border border-slate-200 p-2 rounded-lg w-full text-xs font-bold focus:outline-none" 
                     />
                   </div>
@@ -247,7 +291,7 @@ export default function Commissions({ showToast }) {
                       type="number"
                       placeholder="100000"
                       value={slab.to}
-                      onChange={(e) => handleSlabChange(managerRoleTab, index, 'to', e.target.value)}
+                      onChange={(e) => handleSlabChange(employeeRoleTab, index, 'to', e.target.value)}
                       className="border border-slate-200 p-2 rounded-lg w-full text-xs font-bold focus:outline-none" 
                     />
                   </div>
@@ -258,12 +302,12 @@ export default function Commissions({ showToast }) {
                       step="0.1"
                       placeholder="1.0"
                       value={slab.pct}
-                      onChange={(e) => handleSlabChange(managerRoleTab, index, 'pct', e.target.value)}
+                      onChange={(e) => handleSlabChange(employeeRoleTab, index, 'pct', e.target.value)}
                       className="border border-slate-200 p-2 rounded-lg w-full text-xs font-bold text-right focus:outline-none" 
                     />
                   </div>
                   <button 
-                    onClick={() => handleRemoveSlab(managerRoleTab, index)}
+                    onClick={() => handleRemoveSlab(employeeRoleTab, index)}
                     className="p-2 bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 rounded-lg mt-4"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -272,7 +316,7 @@ export default function Commissions({ showToast }) {
               ))}
               
               <button 
-                onClick={() => handleAddSlab(managerRoleTab)}
+                onClick={() => handleAddSlab(employeeRoleTab)}
                 className="flex items-center gap-1 text-xs font-bold text-brand-orange hover:text-brand-orange-hover mt-3"
               >
                 <Plus className="w-4 h-4" />
@@ -321,6 +365,44 @@ export default function Commissions({ showToast }) {
             <div className="bg-slate-50 border border-slate-100 p-3 rounded-lg flex gap-2 text-[10px] text-slate-500 font-semibold mt-4">
               <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
               <p>Preview tools are simulated and do not persist transaction payouts inside general accounting database ledgers.</p>
+            </div>
+          </div>
+
+          {/* Employee Commissions Ledger Table */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs lg:col-span-3 space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 font-display">Employee Commissions Ledger</h3>
+            <p className="text-xs text-slate-400 font-semibold font-sans">Ledger showing regional employee distribution mappings from active geography node parameters.</p>
+            <div className="border border-slate-100 rounded-lg overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
+                    <th className="px-4 py-3">Employee Name</th>
+                    <th className="px-4 py-3">Designation / Role</th>
+                    <th className="px-4 py-3">City</th>
+                    <th className="px-4 py-3">State</th>
+                    <th className="px-4 py-3">Country</th>
+                    <th className="px-4 py-3 text-right">Simulated Revenue</th>
+                    <th className="px-4 py-3 text-right">Calculated Incentive</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                  {commissionEmployees.map((emp, idx) => {
+                    const geo = getEmployeeGeography(emp.name);
+                    const incentive = calculateEmployeeIncentive(emp.level, emp.revenue);
+                    return (
+                      <tr key={idx}>
+                        <td className="px-4 py-3 text-slate-900 font-bold">{emp.name}</td>
+                        <td className="px-4 py-3 text-slate-500">{emp.role}</td>
+                        <td className="px-4 py-3 text-slate-600">{geo.city}</td>
+                        <td className="px-4 py-3 text-slate-600">{geo.state}</td>
+                        <td className="px-4 py-3 text-slate-600">{geo.country}</td>
+                        <td className="px-4 py-3 text-right text-slate-800">₹{emp.revenue.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right text-emerald-600 font-bold">₹{incentive.toLocaleString('en-IN')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

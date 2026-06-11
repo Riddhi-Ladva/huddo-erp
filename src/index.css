@@ -35,3 +35,17 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* HUDDO-UPDATE: Hierarchy — Scoped font-size classes for node labels */
+.huddo-v2-country-node-label {
+  font-size: 1.125rem !important; /* Larger font size for Country node */
+  line-height: 1.75rem !important;
+}
+.huddo-v2-state-node-label {
+  font-size: 1.0rem !important; /* Larger font size for State node */
+  line-height: 1.5rem !important;
+}
+.huddo-v2-city-node-label {
+  font-size: 0.875rem !important; /* Larger font size for City node */
+  line-height: 1.25rem !important;
+}

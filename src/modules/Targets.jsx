@@ -3,10 +3,15 @@ import { Target, Plus, Award, AlertTriangle, TrendingUp, ShieldAlert, BarChart2 
 import { initialTargets } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 
+// HUDDO-UPDATE: Targets — Added Daily/Weekly timeframe tabs and filter logic with custom empty placeholder states
 export default function Targets({ showToast }) {
-  const [timeframeTab, setTimeframeTab] = useState('monthly'); // monthly | quarterly | yearly
+  const [timeframeTab, setTimeframeTab] = useState('monthly'); // daily | weekly | monthly | quarterly | yearly | custom
   const [entityTab, setEntityTab] = useState('State'); // Country | State | City | Retailer | Team
-  const [targets, setTargets] = useState(initialTargets);
+  const [targets, setTargets] = useState(() => [
+    ...initialTargets.map(t => ({ ...t, timeframe: 'monthly' })),
+    { id: "TGT05", name: "Mumbai Retailer Daily Collection", type: "Retailer", target: 15000, achieved: 12000, orderTarget: 5, orderAchieved: 4, acquisitionTarget: 0, acquisitionAchieved: 0, timeframe: 'daily' },
+    { id: "TGT06", name: "Delhi NCR Weekly Sales Focus", type: "State", target: 800000, achieved: 750000, orderTarget: 25, orderAchieved: 22, acquisitionTarget: 2, acquisitionAchieved: 1, timeframe: 'weekly' }
+  ]);
 
   // Set Target modal
   const [isSetOpen, setIsSetOpen] = useState(false);
@@ -34,7 +39,8 @@ export default function Targets({ showToast }) {
       orderTarget: Number(formData.orderTarget) || 0,
       orderAchieved: 0,
       acquisitionTarget: Number(formData.acquisitionTarget) || 0,
-      acquisitionAchieved: 0
+      acquisitionAchieved: 0,
+      timeframe: timeframeTab
     };
 
     setTargets([newTarget, ...targets]);
@@ -42,7 +48,7 @@ export default function Targets({ showToast }) {
     showToast(`Target configured for ${newTarget.name}.`, "success");
   };
 
-  const filteredTargets = targets.filter(t => t.type === entityTab);
+  const filteredTargets = targets.filter(t => t.type === entityTab && t.timeframe === timeframeTab);
 
   const columns = [
     { header: "Entity Target Name", accessor: "name", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
@@ -121,7 +127,7 @@ export default function Targets({ showToast }) {
       {/* Timeframe selector tabs */}
       <div className="flex justify-between items-center border-t border-slate-200 pt-6">
         <div className="flex border border-slate-200 rounded-lg p-0.5 bg-slate-50">
-          {['monthly', 'quarterly', 'yearly'].map(tf => (
+          {['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'].map(tf => (
             <button 
               key={tf}
               onClick={() => setTimeframeTab(tf)}
@@ -137,7 +143,7 @@ export default function Targets({ showToast }) {
           className="flex items-center gap-2 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
-          <span>Configure Target Target</span>
+          <span>Configure Target</span>
         </button>
       </div>
 
@@ -160,6 +166,7 @@ export default function Targets({ showToast }) {
         data={filteredTargets}
         searchKeys={["name"]}
         searchPlaceholder="Search target sheets..."
+        emptyStateText={timeframeTab === 'daily' ? "No active daily targets configured for this selection." : timeframeTab === 'weekly' ? "No weekly targets scheduled for the current week range." : "No targets found matching selection."}
       />
 
       {/* Set Target Modal */}

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
   TrendingUp, ShoppingCart, Archive, Percent, Users, Award, 
-  ArrowLeft, CheckCircle2, AlertCircle 
+  ArrowLeft, CheckCircle2, AlertCircle, Plus 
 } from 'lucide-react';
-import { initialDepartmentsDetails } from '../mockData';
+import { initialDepartmentsDetails, initialEmployees } from '../mockData';
+import { Modal } from '../components/Common';
 
 const ICONS_MAP = {
   TrendingUp: TrendingUp,
@@ -17,6 +18,41 @@ const ICONS_MAP = {
 export default function Departments({ showToast }) {
   const [departments, setDepartments] = useState(initialDepartmentsDetails);
   const [selectedDeptId, setSelectedDeptId] = useState(null); // id | null
+
+  // HUDDO-UPDATE: Department — Employee list and selected checkboxes state
+  const [employeesList, setEmployeesList] = useState(initialEmployees);
+  const [selectedEmployees, setSelectedEmployees] = useState(new Set());
+
+  // Create Department modal states
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newDeptForm, setNewDeptForm] = useState({ name: '', code: '', manager_id: '', description: '' });
+
+  const handleCreateDeptSubmit = (e) => {
+    e.preventDefault();
+    if (!newDeptForm.name) {
+      showToast("Department Name is required.", "error");
+      return;
+    }
+
+    fetch('/api/departments/create', {
+      method: 'POST',
+      body: JSON.stringify(newDeptForm)
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Creation failed");
+        return res.json();
+      })
+      .then(newDept => {
+        setDepartments([...departments, newDept]);
+        setIsCreateOpen(false);
+        setNewDeptForm({ name: '', code: '', manager_id: '', description: '' });
+        showToast(`Department "${newDept.name}" created successfully.`, "success");
+      })
+      .catch(err => {
+        showToast("Error creating department.", "error");
+        console.error(err);
+      });
+  };
 
   const handleToggleFeature = (deptId, featureKey) => {
     setDepartments(departments.map(dept => {
@@ -106,6 +142,93 @@ export default function Departments({ showToast }) {
             ))}
           </div>
         </div>
+
+        {/* HUDDO-UPDATE: Department — Individual checkboxes per employee list */}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 font-display">Department Employee Roster</h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">Roster list of personnel currently assigned to {selectedDept.name} department.</p>
+            </div>
+            {selectedEmployees.size > 0 && (
+              <span className="text-xs font-bold text-brand-orange bg-orange-50 px-2.5 py-1 rounded-lg">
+                {selectedEmployees.size} selected
+              </span>
+            )}
+          </div>
+          <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <table className="w-full text-left text-xs font-semibold text-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 w-10">
+                    <input 
+                      type="checkbox"
+                      checked={employeesList.filter(emp => emp.department === selectedDept.id).length > 0 && selectedEmployees.size === employeesList.filter(emp => emp.department === selectedDept.id).length}
+                      onChange={() => {
+                        const deptEmps = employeesList.filter(emp => emp.department === selectedDept.id);
+                        if (selectedEmployees.size === deptEmps.length) {
+                          setSelectedEmployees(new Set());
+                        } else {
+                          setSelectedEmployees(new Set(deptEmps.map(emp => emp.id)));
+                        }
+                      }}
+                      className="w-4 h-4 rounded text-brand-orange border-slate-300 cursor-pointer"
+                    />
+                  </th>
+                  <th className="px-4 py-3">Photo</th>
+                  <th className="px-4 py-3">Employee ID</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Designation</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {employeesList.filter(emp => emp.department === selectedDept.id).length > 0 ? (
+                  employeesList.filter(emp => emp.department === selectedDept.id).map(emp => {
+                    const isChecked = selectedEmployees.has(emp.id);
+                    return (
+                      <tr key={emp.id} className="hover:bg-slate-50/20">
+                        <td className="px-4 py-2.5">
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              const newSelected = new Set(selectedEmployees);
+                              if (newSelected.has(emp.id)) {
+                                newSelected.delete(emp.id);
+                              } else {
+                                newSelected.add(emp.id);
+                              }
+                              setSelectedEmployees(newSelected);
+                            }}
+                            className="w-4 h-4 rounded text-brand-orange border-slate-300 cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <img src={emp.avatar} alt={emp.name} className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-500">{emp.id}</td>
+                        <td className="px-4 py-2.5 text-slate-900 font-bold">{emp.name}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{emp.designation}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${emp.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                            {emp.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-slate-400 font-medium">
+                      No employees mapped to this department yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     );
   }
@@ -113,9 +236,20 @@ export default function Departments({ showToast }) {
   return (
     <div className="space-y-6">
       {/* List Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 font-display">Department Management</h1>
-        <p className="text-sm text-slate-500">Enable features, verify division heads, and customize core workflows for departmental staff.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 font-display">Department Management</h1>
+          <p className="text-sm text-slate-500">Enable features, verify division heads, and customize core workflows for departmental staff.</p>
+        </div>
+        
+        {/* HUDDO-UPDATE: Department — Add Create Department button */}
+        <button 
+          onClick={() => setIsCreateOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-sm font-semibold rounded-lg shadow-sm transition-colors self-start"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create Department</span>
+        </button>
       </div>
 
       {/* Six Cards Grid */}
@@ -144,6 +278,61 @@ export default function Departments({ showToast }) {
           );
         })}
       </div>
+
+      {/* HUDDO-UPDATE: Department — Create Department Modal */}
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        title="Create Department"
+        onConfirm={handleCreateDeptSubmit}
+      >
+        <form className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department Name *</label>
+            <input 
+              type="text" 
+              placeholder="e.g., Marketing & Growth"
+              value={newDeptForm.name}
+              onChange={(e) => setNewDeptForm({ ...newDeptForm, name: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange bg-white text-slate-800"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Department Code (Optional)</label>
+            <input 
+              type="text" 
+              placeholder="e.g., MKTG"
+              value={newDeptForm.code}
+              onChange={(e) => setNewDeptForm({ ...newDeptForm, code: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange bg-white text-slate-800"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assign Manager</label>
+            <select
+              value={newDeptForm.manager_id}
+              onChange={(e) => setNewDeptForm({ ...newDeptForm, manager_id: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 text-slate-800"
+            >
+              <option value="">Select Manager...</option>
+              {employeesList.map(emp => (
+                <option key={emp.id} value={emp.name}>{emp.name} ({emp.designation})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description (Optional)</label>
+            <textarea 
+              rows="3" 
+              placeholder="Describe department operations, goals, etc."
+              value={newDeptForm.description}
+              onChange={(e) => setNewDeptForm({ ...newDeptForm, description: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange bg-white text-slate-800"
+            />
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

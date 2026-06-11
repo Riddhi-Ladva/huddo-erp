@@ -4,8 +4,9 @@ import { initialInventory, warehouses } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
+// HUDDO-UPDATE: Inventory — Added Return Stock Workflow tab with selectors, API logs, and history list
 export default function Inventory({ showToast }) {
-  const [activeTab, setActiveTab] = useState('stock'); // stock | alerts | transfer | warehouses | reports
+  const [activeTab, setActiveTab] = useState('stock'); // stock | alerts | transfer | warehouses | returns | reports
   const [stock, setStock] = useState(initialInventory);
   const [whList, setWhList] = useState(warehouses);
 
@@ -21,6 +22,84 @@ export default function Inventory({ showToast }) {
     qty: '50',
     date: '2026-06-08'
   });
+
+  // Returns workflow state
+  const [returnHistory, setReturnHistory] = useState([]);
+  const [returnForm, setReturnForm] = useState({
+    productId: '',
+    qty: '',
+    reason: 'Defective Product',
+    refNo: '',
+    notes: ''
+  });
+
+  React.useEffect(() => {
+    fetch('/api/inventory/return-stock')
+      .then(res => res.json())
+      .then(data => setReturnHistory(data))
+      .catch(err => console.error("Error loading return logs", err));
+  }, []);
+
+  React.useEffect(() => {
+    if (stock.length > 0 && !returnForm.productId) {
+      setReturnForm(prev => ({ ...prev, productId: stock[0].id }));
+    }
+  }, [stock, returnForm.productId]);
+
+  const handleReturnStockSubmit = async (e) => {
+    e.preventDefault();
+    if (!returnForm.productId || !returnForm.qty) {
+      showToast("Please fill all required fields.", "error");
+      return;
+    }
+    try {
+      const res = await fetch('/api/inventory/return-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: returnForm.productId,
+          quantity: Number(returnForm.qty),
+          reason: returnForm.reason,
+          reference_no: returnForm.refNo,
+          notes: returnForm.notes,
+          returned_by: "Rohan Hudda"
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Stock return registered. Stock level increased.", "success");
+        // Reload history
+        const histRes = await fetch('/api/inventory/return-stock');
+        const histData = await histRes.json();
+        setReturnHistory(histData);
+        // Update local stock counts
+        setStock(stock.map(item => {
+          if (item.id === returnForm.productId) {
+            const newLevel = item.stockLevel + Number(returnForm.qty);
+            return {
+              ...item,
+              stockLevel: newLevel,
+              status: newLevel <= item.reorderLevel ? (newLevel === 0 ? 'Out of Stock' : 'Low Stock') : 'Normal'
+            };
+          }
+          return item;
+        }));
+        // Reset form
+        setReturnForm({
+          productId: stock[0]?.id || '',
+          qty: '',
+          reason: 'Defective Product',
+          refNo: '',
+          notes: ''
+        });
+      } else {
+        showToast(data.error || "Failed to process return", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error processing return", "error");
+    }
+  };
 
   const handleUpdateReorder = (id, newVal) => {
     setStock(stock.map(item => 
@@ -202,6 +281,12 @@ export default function Inventory({ showToast }) {
           Warehouse Facilities ({whList.length})
         </button>
         <button 
+          onClick={() => setActiveTab('returns')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'returns' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Return Stock Workflow
+        </button>
+        <button 
           onClick={() => setActiveTab('reports')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'reports' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
@@ -310,6 +395,109 @@ export default function Inventory({ showToast }) {
             Dispatch Transfer Order
           </button>
         </form>
+      )}
+
+      {activeTab === 'returns' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Return stock form */}
+          <form onSubmit={handleReturnStockSubmit} className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4 h-fit">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 font-display">Register Stock Return</h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">Increases product inventory count and logs reference tracking details.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Footwear SKU *</label>
+              <select 
+                value={returnForm.productId} 
+                onChange={(e) => setReturnForm({ ...returnForm, productId: e.target.value })}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
+              >
+                {stock.map(item => (
+                  <option key={item.id} value={item.id}>{item.name} ({item.sku})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity (Pairs) *</label>
+                <input 
+                  type="number" 
+                  value={returnForm.qty} 
+                  onChange={(e) => setReturnForm({ ...returnForm, qty: e.target.value })}
+                  placeholder="e.g. 10"
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Return Reason *</label>
+                <select 
+                  value={returnForm.reason} 
+                  onChange={(e) => setReturnForm({ ...returnForm, reason: e.target.value })}
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
+                >
+                  <option value="Defective Product">Defective Product</option>
+                  <option value="Size Misalignment">Size Misalignment</option>
+                  <option value="Cancel Order">Cancel Order</option>
+                  <option value="Overstock Return">Overstock Return</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reference No. (Invoice / Order)</label>
+              <input 
+                type="text" 
+                value={returnForm.refNo} 
+                onChange={(e) => setReturnForm({ ...returnForm, refNo: e.target.value })}
+                placeholder="e.g. INV-2026-001" 
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Additional Notes</label>
+              <textarea 
+                rows="2" 
+                value={returnForm.notes} 
+                onChange={(e) => setReturnForm({ ...returnForm, notes: e.target.value })}
+                placeholder="Detailed explanation..." 
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
+              />
+            </div>
+
+            <button 
+              type="submit"
+              className="w-full py-2 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+            >
+              Submit Return Stock
+            </button>
+          </form>
+
+          {/* Return History table */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs lg:col-span-2 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 font-display">Returned Stock History Logs</h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">Audit log of all processed stock return transactions.</p>
+            </div>
+            <DataTable 
+              columns={[
+                { header: "Log ID", accessor: "id", render: (val) => <span className="font-bold text-slate-800 font-mono">{val}</span> },
+                { header: "Product Name", accessor: "productName", render: (val) => <span className="font-bold text-slate-800 font-display text-[11px]">{val}</span> },
+                { header: "SKU", accessor: "sku", render: (val) => <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[9px] text-slate-600 font-bold">{val}</code> },
+                { header: "Qty", accessor: "quantity", render: (val) => <span className="font-bold text-emerald-600">+{val}</span> },
+                { header: "Reason", accessor: "reason" },
+                { header: "Reference ID", accessor: "reference_no" },
+                { header: "Return Date", accessor: "created_at", render: (val) => <span>{new Date(val).toLocaleDateString()}</span> }
+              ]} 
+              data={returnHistory} 
+              searchKeys={["id", "productName", "sku", "reason", "reference_no"]} 
+              searchPlaceholder="Search return log history..."
+            />
+          </div>
+        </div>
       )}
 
       {activeTab === 'reports' && (

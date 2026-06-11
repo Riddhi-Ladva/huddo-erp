@@ -13,18 +13,20 @@ export default function Products({ showToast }) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
 
+// HUDDO-UPDATE: Products — Added HSN Code, Article No, Colour, and Franchise Points to catalog forms, details overview, and lists, and renamed Cost Price to Franchise Cost Price
   // Form states
   const [formData, setFormData] = useState({
     name: '', category: 'Sports Shoes', description: '',
     sizes: [6, 7, 8, 9, 10], colors: ["#000000"],
-    mrp: '', costPrice: '', status: 'Active'
+    mrp: '', costPrice: '', status: 'Active',
+    hsn_code: '', article_no: '', colour: '', franchise_points: ''
   });
   const [bulkAdjustment, setBulkAdjustment] = useState({ type: 'percent', value: '' });
 
   const handleAddSubmit = (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.mrp || !formData.costPrice) {
-      showToast("Please fill all required pricing inputs.", "error");
+    if (!formData.name || !formData.mrp || !formData.costPrice || !formData.article_no || !formData.hsn_code || !formData.colour || !formData.franchise_points) {
+      showToast("Please fill all required footwear parameters.", "error");
       return;
     }
 
@@ -44,7 +46,11 @@ export default function Products({ showToast }) {
       status: formData.status,
       retailerMargin: 20,
       cityManagerIncentive: 2,
-      stateManagerIncentive: 1
+      stateManagerIncentive: 1,
+      hsn_code: formData.hsn_code,
+      article_no: formData.article_no,
+      colour: formData.colour,
+      franchise_points: Number(formData.franchise_points) || 0
     };
 
     setProducts([...products, newProd]);
@@ -95,9 +101,13 @@ export default function Products({ showToast }) {
       <img src={val} alt={row.name} className="w-10 h-10 object-cover rounded-lg border border-slate-100" />
     )},
     { header: "Product Name", accessor: "name", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
+    { header: "Article No.", accessor: "article_no" },
     { header: "Category", accessor: "category" },
     { header: "MRP (₹)", accessor: "mrp", render: (val) => <span className="font-bold text-slate-900">₹{val.toLocaleString('en-IN')}</span> },
-    { header: "Cost Price (₹)", accessor: "costPrice", render: (val) => <span className="font-medium text-slate-500">₹{val.toLocaleString('en-IN')}</span> },
+    { header: "Franchise Cost Price (₹)", accessor: "costPrice", render: (val) => <span className="font-medium text-slate-500">₹{val.toLocaleString('en-IN')}</span> },
+    { header: "HSN Code", accessor: "hsn_code" },
+    { header: "Colour", accessor: "colour" },
+    { header: "Franchise Points", accessor: "franchise_points", render: (val) => <span className="font-bold text-indigo-600">{val} pts</span> },
     { header: "Gross Margin", accessor: "margin", render: (val) => <span className="font-bold text-emerald-600">{val}%</span> },
     { header: "Status", accessor: "status", render: (val) => (
       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${val === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
@@ -219,7 +229,7 @@ export default function Products({ showToast }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Cost Price (₹) *</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Franchise Cost Price (₹) *</label>
               <input type="number" placeholder="1200" value={formData.costPrice} onChange={(e) => setFormData({...formData, costPrice: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
             </div>
             <div>
@@ -228,6 +238,28 @@ export default function Products({ showToast }) {
                 <option value="Active">Active</option>
                 <option value="Discontinued">Discontinued</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Article No. *</label>
+              <input type="text" placeholder="ART-XX-XX" value={formData.article_no} onChange={(e) => setFormData({...formData, article_no: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">HSN Code *</label>
+              <input type="text" placeholder="6403.XX.XX" value={formData.hsn_code} onChange={(e) => setFormData({...formData, hsn_code: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Colour *</label>
+              <input type="text" placeholder="Red / Black" value={formData.colour} onChange={(e) => setFormData({...formData, colour: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Franchise Points *</label>
+              <input type="number" step="0.01" placeholder="10.0" value={formData.franchise_points} onChange={(e) => setFormData({...formData, franchise_points: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
             </div>
           </div>
 
@@ -267,7 +299,7 @@ export default function Products({ showToast }) {
         <div className="space-y-4">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex gap-2">
             <span className="font-bold">⚠️ Warning:</span>
-            <p>This alters the base MRP and Cost price indices for all footwear models in the current system. This process is irreversible.</p>
+            <p>This alters the base MRP and Franchise Cost price indices for all footwear models in the current system. This process is irreversible.</p>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Percentage Mark Up / Mark Down (%)</label>
@@ -324,7 +356,7 @@ export default function Products({ showToast }) {
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-center">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Cost Price</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Franchise Cost Price</span>
                       <p className="text-base font-bold text-slate-800 font-display mt-0.5">₹{viewingProd.costPrice}</p>
                     </div>
                     <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-center">
@@ -334,6 +366,27 @@ export default function Products({ showToast }) {
                     <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-center">
                       <span className="text-[10px] text-slate-400 uppercase font-semibold">Size Count</span>
                       <p className="text-base font-bold text-slate-800 font-display mt-0.5">{viewingProd.sizes.length} Sizes</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Article Number</span>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{viewingProd.article_no || 'N/A'}</p>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">HSN Code</span>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{viewingProd.hsn_code || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Colour</span>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{viewingProd.colour || 'N/A'}</p>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Franchise Points</span>
+                      <p className="text-sm font-bold text-indigo-600 mt-0.5">{viewingProd.franchise_points || 0} pts</p>
                     </div>
                   </div>
                 </div>

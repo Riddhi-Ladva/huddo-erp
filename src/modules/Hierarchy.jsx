@@ -21,6 +21,35 @@ export default function Hierarchy({ showToast }) {
   // Node expand state in the visual tree
   const [expandedNodes, setExpandedNodes] = useState({ founder: true, country: true, state: true });
 
+  // HUDDO-UPDATE: Hierarchy — CEO state
+  const [ceoManager, setCeoManager] = useState("Karan Devani");
+
+  // State / City revenues loaded from GET API endpoints
+  const [stateRevenues, setStateRevenues] = useState({});
+  const [cityRevenues, setCityRevenues] = useState({});
+
+  React.useEffect(() => {
+    // Fetch state revenues
+    states.forEach(st => {
+      fetch(`/api/hierarchy/state/${st.id}/revenue`)
+        .then(res => res.json())
+        .then(data => {
+          setStateRevenues(prev => ({ ...prev, [st.id]: data.revenue }));
+        })
+        .catch(err => console.error("Error fetching state revenue", err));
+    });
+
+    // Fetch city revenues
+    cities.forEach(ct => {
+      fetch(`/api/hierarchy/city/${ct.id}/revenue`)
+        .then(res => res.json())
+        .then(data => {
+          setCityRevenues(prev => ({ ...prev, [ct.id]: data.revenue }));
+        })
+        .catch(err => console.error("Error fetching city revenue", err));
+    });
+  }, [states, cities]);
+
   const handleAddSubmit = (e) => {
     e.preventDefault();
     if (!formData.name || !formData.manager) {
@@ -74,7 +103,9 @@ export default function Hierarchy({ showToast }) {
     e.preventDefault();
     if (!assignedManagerName) return;
 
-    if (assignTarget.type === 'Country') {
+    if (assignTarget.type === 'CEO') {
+      setCeoManager(assignedManagerName);
+    } else if (assignTarget.type === 'Country') {
       setCountries(countries.map(c => c.id === assignTarget.id ? { ...c, manager: assignedManagerName } : c));
     } else if (assignTarget.type === 'State') {
       setStates(states.map(s => s.id === assignTarget.id ? { ...s, manager: assignedManagerName } : s));
@@ -113,6 +144,19 @@ export default function Hierarchy({ showToast }) {
     { header: "State Manager", accessor: "manager", render: (val) => <span className="font-medium text-slate-700 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" />{val}</span> },
     { header: "Total Cities", accessor: "citiesCount" },
     { header: "Retailers", accessor: "retailersCount" },
+    // HUDDO-UPDATE: Hierarchy — State Revenue Column from aggregated billing data
+    { 
+      header: "Revenue", 
+      accessor: "id", 
+      render: (val, row) => {
+        const rev = stateRevenues[val];
+        return rev !== undefined ? (
+          <span className="font-bold text-slate-900">₹{rev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        ) : (
+          <span className="text-slate-400 font-medium">—</span> // HUDDO-TODO: Verify data join for state revenue aggregation
+        );
+      } 
+    },
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <div className="flex gap-2">
         <button onClick={() => triggerAssign(row, 'State')} className="text-xs font-bold text-brand-orange hover:underline">Assign Manager</button>
@@ -126,6 +170,19 @@ export default function Hierarchy({ showToast }) {
     { header: "State Region", accessor: "state" },
     { header: "City Manager", accessor: "manager", render: (val) => <span className="font-medium text-slate-700 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" />{val}</span> },
     { header: "Retailers", accessor: "retailersCount" },
+    // HUDDO-UPDATE: Hierarchy — City Revenue Column from aggregated billing data
+    { 
+      header: "Revenue", 
+      accessor: "id", 
+      render: (val, row) => {
+        const rev = cityRevenues[val];
+        return rev !== undefined ? (
+          <span className="font-bold text-slate-900">₹{rev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        ) : (
+          <span className="text-slate-400 font-medium">—</span> // HUDDO-TODO: Verify data join for city revenue aggregation
+        );
+      } 
+    },
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <div className="flex gap-2">
         <button onClick={() => triggerAssign(row, 'City')} className="text-xs font-bold text-brand-orange hover:underline">Assign Manager</button>
@@ -201,11 +258,28 @@ export default function Hierarchy({ showToast }) {
               <div className="w-0.5 h-6 bg-slate-300"></div>
             </div>
 
+            {/* HUDDO-UPDATE: Hierarchy — CEO level added */}
+            <div className="flex flex-col items-center w-full">
+              <div className="bg-slate-800 text-white px-6 py-3 rounded-lg border border-slate-700 shadow-md text-center relative group w-64">
+                <span className="text-[9px] uppercase font-bold text-emerald-400">CEO</span>
+                <h4 className="font-bold text-sm font-display mt-0.5">{ceoManager}</h4>
+                <p className="text-[10px] text-slate-400">Coverage: Global Operations</p>
+                <button 
+                  onClick={() => triggerAssign({ id: 'ceo', name: 'CEO', manager: ceoManager }, 'CEO')} 
+                  className="hidden group-hover:block absolute right-2 top-2 text-[10px] bg-brand-orange text-white px-1.5 py-0.5 rounded font-bold"
+                >
+                  Assign
+                </button>
+              </div>
+              <div className="w-0.5 h-6 bg-slate-300"></div>
+            </div>
+
             {/* COUNTRY MANAGER */}
             <div className="flex flex-col items-center w-full">
               <div className="bg-slate-900 text-white px-6 py-3 rounded-lg border border-slate-700 shadow-md text-center relative group w-64">
                 <span className="text-[9px] uppercase font-bold text-blue-400">Country Manager (India)</span>
-                <h4 className="font-bold text-sm font-display mt-0.5">{countries[0]?.manager || "Rajesh Sharma"}</h4>
+                {/* HUDDO-UPDATE: Hierarchy — Apply custom v2 font sizing to Country Manager */}
+                <h4 className="font-bold font-display mt-0.5 huddo-v2-country-node-label">{countries[0]?.manager || "Rajesh Sharma"}</h4>
                 <p className="text-[10px] text-slate-400">Coverage: 5 Active States</p>
               </div>
               <div className="w-0.5 h-6 bg-slate-300"></div>
@@ -217,7 +291,8 @@ export default function Hierarchy({ showToast }) {
                 <div key={st.id} className="flex flex-col items-center w-full">
                   <div className="bg-white border border-slate-200 p-4 rounded-lg shadow-sm w-full text-center relative">
                     <span className="text-[9px] uppercase font-bold text-slate-500">State Manager ({st.name})</span>
-                    <h4 className="font-bold text-xs text-slate-800 font-display mt-0.5">{st.manager}</h4>
+                    {/* HUDDO-UPDATE: Hierarchy — Apply custom v2 font sizing to State Manager */}
+                    <h4 className="font-bold text-slate-800 font-display mt-0.5 huddo-v2-state-node-label">{st.manager}</h4>
                     <p className="text-[10px] text-slate-400">{st.citiesCount} Cities Managed</p>
                   </div>
                   <div className="w-0.5 h-6 bg-slate-300"></div>
@@ -227,7 +302,8 @@ export default function Hierarchy({ showToast }) {
                     {cities.filter(ct => ct.state === st.name).slice(0, 1).map(ct => (
                       <div key={ct.id} className="bg-orange-50/50 border border-orange-200 p-3 rounded-lg text-center">
                         <span className="text-[8px] uppercase font-bold text-brand-orange">City Manager ({ct.name})</span>
-                        <h5 className="font-bold text-xs text-slate-800 font-display mt-0.5">{ct.manager}</h5>
+                        {/* HUDDO-UPDATE: Hierarchy — Apply custom v2 font sizing to City Manager */}
+                        <h5 className="font-bold text-slate-800 font-display mt-0.5 huddo-v2-city-node-label">{ct.manager}</h5>
                         <p className="text-[9px] text-slate-500">8 Retailer Mapped</p>
                       </div>
                     ))}

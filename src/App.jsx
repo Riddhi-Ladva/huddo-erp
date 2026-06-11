@@ -1,9 +1,10 @@
+import './mockApi'; // Global window.fetch interceptor
 import React, { useState, useEffect } from 'react';
 import { 
   Home, GitBranch, LayoutGrid, Map, Users, UsersRound, Award, Store, Package, 
   ShoppingCart, CreditCard, Percent, TrendingUp, Target, MapPin, CheckSquare, 
   Archive, Shield, Bell, BarChart3, Lock, ChevronLeft, ChevronRight, Search, 
-  Menu, LogOut, Settings, User, X
+  Menu, LogOut, Settings, User, X, ShoppingBag
 } from 'lucide-react';
 import { Toast } from './components/Common';
 
@@ -29,6 +30,9 @@ import Notifications from './modules/Notifications';
 import Reports from './modules/Reports';
 import Security from './modules/Security';
 import Inventory from './modules/Inventory';
+import Purchase from './modules/Purchase';
+import Customers from './modules/Customers';
+import PettyCash from './modules/PettyCash';
 
 // Navigation Schema with Sections & Mapped Icons
 const NAV_MENU = [
@@ -59,7 +63,8 @@ const NAV_MENU = [
     items: [
       { id: "Retailers", label: "Retailers", icon: Store, component: Retailers },
       { id: "Products", label: "Products", icon: Package, component: Products },
-      { id: "Orders", label: "Orders", icon: ShoppingCart, component: Orders }
+      { id: "Orders", label: "Orders", icon: ShoppingCart, component: Orders },
+      { id: "Customers", label: "Customers", icon: Users, component: Customers }
     ]
   },
   {
@@ -68,7 +73,8 @@ const NAV_MENU = [
       { id: "Billing", label: "Billing & Payments", icon: CreditCard, component: BillingPayments },
       { id: "Commissions", label: "Commissions", icon: Percent, component: Commissions },
       { id: "Sales", label: "Sales", icon: TrendingUp, component: Sales },
-      { id: "Targets", label: "Targets", icon: Target, component: Targets }
+      { id: "Targets", label: "Targets", icon: Target, component: Targets },
+      { id: "Petty Cash", label: "Petty Cash", icon: CreditCard, component: PettyCash }
     ]
   },
   {
@@ -76,7 +82,8 @@ const NAV_MENU = [
     items: [
       { id: "Field Tracking", label: "Field Tracking", icon: MapPin, component: FieldTracking },
       { id: "Approvals", label: "Approvals", icon: CheckSquare, component: Approvals },
-      { id: "Inventory", label: "Inventory", icon: Archive, component: Inventory }
+      { id: "Inventory", label: "Inventory", icon: Archive, component: Inventory },
+      { id: "Purchase", label: "Purchase & QR", icon: ShoppingBag, component: Purchase }
     ]
   },
   {
@@ -94,6 +101,31 @@ export default function App() {
   const [activeScreen, setActiveScreen] = useState('Dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
+  // HUDDO-UPDATE: Core — Added simulated role state and RBAC route filtering
+  const [currentRole, setCurrentRole] = useState(() => localStorage.getItem('huddo_role') || 'Founder');
+
+  const handleRoleChange = (role) => {
+    setCurrentRole(role);
+    localStorage.setItem('huddo_role', role);
+    showToast(`Simulated active session changed to: ${role}`, "success");
+  };
+
+  const canViewItem = (itemId) => {
+    if (itemId === 'Customers') {
+      return ["Founder", "CEO", "Admin", "Country Manager", "State Manager", "City Manager"].includes(currentRole);
+    }
+    if (itemId === 'Petty Cash') {
+      return ["Founder", "CEO", "Admin", "Finance Manager"].includes(currentRole);
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    if (!canViewItem(activeScreen)) {
+      setActiveScreen('Dashboard');
+    }
+  }, [currentRole, activeScreen]);
+
   // Header menu states
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -137,7 +169,7 @@ export default function App() {
   // Filter modules for search palette
   const allNavItems = NAV_MENU.reduce((acc, curr) => [...acc, ...curr.items], []);
   const searchedItems = searchQuery.trim() === '' ? [] : allNavItems.filter(item => 
-    item.label.toLowerCase().includes(searchQuery.toLowerCase())
+    item.label.toLowerCase().includes(searchQuery.toLowerCase()) && canViewItem(item.id)
   );
 
   return (
@@ -175,7 +207,7 @@ export default function App() {
                 )}
 
                 {/* Section Items */}
-                {section.items.map(item => {
+                {section.items.filter(item => canViewItem(item.id)).map(item => {
                   const Icon = item.icon;
                   const isActive = activeScreen === item.id;
                   return (
@@ -286,10 +318,28 @@ export default function App() {
               </button>
 
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-40 py-2">
-                  <div className="px-4 py-2 border-b border-slate-100 mb-1.5">
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-40 py-2">
+                  <div className="px-4 py-2 border-b border-slate-100 mb-1.5 bg-slate-50/50 rounded-t-xl">
                     <span className="font-bold text-slate-800 block text-xs font-display">Rohan Hudda</span>
-                    <span className="text-[9px] text-slate-400 font-bold block">Founder Profile</span>
+                    <span className="text-[10px] text-brand-orange font-bold block">{currentRole} Session</span>
+                  </div>
+                  
+                  <div className="px-4 py-2 border-b border-slate-100 mb-1.5">
+                    <label className="block text-[8px] uppercase font-bold text-slate-400 mb-1">Select Active Role (RBAC)</label>
+                    <select
+                      value={currentRole}
+                      onChange={(e) => { handleRoleChange(e.target.value); setIsProfileOpen(false); }}
+                      className="w-full text-[10px] border border-slate-200 rounded p-1 bg-white font-bold text-slate-700 focus:outline-none"
+                    >
+                      <option value="Founder">Founder</option>
+                      <option value="CEO">CEO</option>
+                      <option value="Admin">Admin</option>
+                      <option value="Country Manager">Country Manager</option>
+                      <option value="State Manager">State Manager</option>
+                      <option value="City Manager">City Manager</option>
+                      <option value="Finance Manager">Finance Manager</option>
+                      <option value="Sales Executive">Sales Executive</option>
+                    </select>
                   </div>
                   
                   <button 
@@ -325,7 +375,7 @@ export default function App() {
 
         {/* 3. Main Dashboard canvas */}
         <main className="p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto">
-          <ActiveComponent onNavigate={(target) => setActiveScreen(target)} showToast={showToast} />
+          <ActiveComponent onNavigate={(target) => setActiveScreen(target)} showToast={showToast} userRole={currentRole} />
         </main>
       </div>
 

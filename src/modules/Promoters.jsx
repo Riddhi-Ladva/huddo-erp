@@ -11,6 +11,27 @@ export default function Promoters({ showToast }) {
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingPromoter, setViewingPromoter] = useState(null);
+  const [promoterTab, setPromoterTab] = useState('overview'); // overview | revenue
+
+  // HUDDO-UPDATE: Promoters — Paid/Unpaid payment status states
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState('All'); // All | Paid | Unpaid
+
+  // HUDDO-UPDATE: Promoters — Revenue billing chain list state
+  const [revenueBillings, setRevenueBillings] = useState([]);
+  const [billingPage, setBillingPage] = useState(1);
+  const itemsPerBillingPage = 5;
+
+  useEffect(() => {
+    if (viewingPromoter) {
+      fetch(`/api/promoters/${viewingPromoter.name}/revenue-billings`)
+        .then(res => res.json())
+        .then(data => setRevenueBillings(data))
+        .catch(err => console.error("Error loading promoter revenue billings", err));
+    } else {
+      setRevenueBillings([]);
+      setBillingPage(1);
+    }
+  }, [viewingPromoter]);
 
   // New Promoter Form
   const [formData, setFormData] = useState({
@@ -67,15 +88,28 @@ export default function Promoters({ showToast }) {
     }
   };
 
+  const showTerritory = false; // HUDDO-UPDATE: Promoters — Allocated Territory hidden per client request. Data preserved in DB. Re-enable by removing this condition.
+
   // Promoter Table Columns
   const columns = [
     { header: "Name", accessor: "name", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
     { header: "Code ID", accessor: "code", render: (val) => <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold text-[11px]">{val}</code> },
     { header: "Mobile", accessor: "mobile" },
-    { header: "Allocated Territory", accessor: "territory", render: (val) => <span className="font-semibold text-slate-500">{val.join(", ")}</span> },
+    ...(showTerritory ? [{ header: "Allocated Territory", accessor: "territory", render: (val) => <span className="font-semibold text-slate-500">{val.join(", ")}</span> }] : []),
     { header: "Retailers Mapped", accessor: "retailersAdded", render: (val) => <span className="font-bold text-slate-700">{val} shops</span> },
     { header: "Revenue (₹)", accessor: "revenue", render: (val) => <span className="font-bold text-slate-900">₹{val.toLocaleString('en-IN')}</span> },
-    { header: "Earned Royalty", accessor: "royaltyEarned", render: (val) => <span className="font-bold text-emerald-600">₹{val.toLocaleString('en-IN')}</span> },
+    // HUDDO-UPDATE: Promoters — Earned Royalty label updated to show 5%
+    { header: "Earned Royalty (5%)", accessor: "royaltyEarned", render: (val) => <span className="font-bold text-emerald-600">₹{val.toLocaleString('en-IN')}</span> },
+    // HUDDO-UPDATE: Promoters — Paid/Unpaid payment status
+    { 
+      header: "Payment Status", 
+      accessor: (row) => row.royaltyPending > 0 ? "Unpaid" : "Paid",
+      render: (val) => (
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${val === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+          {val}
+        </span>
+      )
+    },
     { header: "Status", accessor: "status", render: (val) => (
       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${val === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
         {val}
@@ -83,7 +117,7 @@ export default function Promoters({ showToast }) {
     )},
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <div className="flex gap-2">
-        <button onClick={() => setViewingPromoter(row)} className="p-1 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded transition-colors" title="View details & royalty summary">
+        <button onClick={() => { setViewingPromoter(row); setPromoterTab('overview'); }} className="p-1 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded transition-colors" title="View details & royalty summary">
           <Eye className="w-4 h-4" />
         </button>
         <button 
@@ -98,6 +132,11 @@ export default function Promoters({ showToast }) {
       </div>
     )}
   ];
+
+  const filteredPromoters = promoters.filter(p => {
+    const status = p.royaltyPending > 0 ? "Unpaid" : "Paid";
+    return filterPaymentStatus === 'All' || status === filterPaymentStatus;
+  });
 
   // Mock royalty monthly data for detail view
   const mockRoyaltyTrend = [
@@ -125,10 +164,25 @@ export default function Promoters({ showToast }) {
         </button>
       </div>
 
+      {/* HUDDO-UPDATE: Promoters — Paid/Unpaid payment status filter */}
+      <div className="flex border-b border-slate-200">
+        {['All', 'Paid', 'Unpaid'].map(status => (
+          <button
+            key={status}
+            onClick={() => setFilterPaymentStatus(status)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              filterPaymentStatus === status ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {status}
+          </button>
+        ))}
+      </div>
+
       {/* Promoters roster */}
       <DataTable 
         columns={columns} 
-        data={promoters}
+        data={filteredPromoters}
         searchKeys={["name", "code", "mobile"]}
         searchPlaceholder="Search by name, promoter code, or mobile number..."
       />
@@ -222,28 +276,31 @@ export default function Promoters({ showToast }) {
             </div>
           </div>
 
-          <div className="border-t border-slate-100 pt-3">
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Territory Mapping Allocation</label>
-            <div className="flex flex-wrap gap-2">
-              {["Mumbai", "Pune", "New Delhi", "Bengaluru", "Ahmedabad"].map(city => {
-                const isSelected = formData.territories.includes(city);
-                return (
-                  <button
-                    key={city}
-                    type="button"
-                    onClick={() => toggleTerritoryOption(city)}
-                    className={`px-3 py-1 text-xs rounded-full border transition-all ${
-                      isSelected 
-                        ? 'bg-orange-50 border-brand-orange text-brand-orange font-bold' 
-                        : 'bg-white border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {city}
-                  </button>
-                );
-              })}
+          {/* HUDDO-UPDATE: Promoters — Allocated Territory hidden per client request. Data preserved in DB. Re-enable by removing this condition. */}
+          {showTerritory && (
+            <div className="border-t border-slate-100 pt-3">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Territory Mapping Allocation</label>
+              <div className="flex flex-wrap gap-2">
+                {["Mumbai", "Pune", "New Delhi", "Bengaluru", "Ahmedabad"].map(city => {
+                  const isSelected = formData.territories.includes(city);
+                  return (
+                    <button
+                      key={city}
+                      type="button"
+                      onClick={() => toggleTerritoryOption(city)}
+                      className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                        isSelected 
+                          ? 'bg-orange-50 border-brand-orange text-brand-orange font-bold' 
+                          : 'bg-white border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {city}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
             <div>
@@ -277,71 +334,164 @@ export default function Promoters({ showToast }) {
               </button>
             </div>
 
+            {/* HUDDO-UPDATE: Promoters — Sub-tabs for detail view */}
+            <div className="flex border-b border-slate-200 px-6 bg-slate-50/30">
+              <button 
+                onClick={() => setPromoterTab('overview')}
+                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${promoterTab === 'overview' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500'}`}
+              >
+                Overview Breakdown
+              </button>
+              <button 
+                onClick={() => setPromoterTab('revenue')}
+                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${promoterTab === 'revenue' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500'}`}
+              >
+                Revenue Billing Chain
+              </button>
+            </div>
+
             {/* Content info */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Scorecard cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Royalty Earned</span>
-                  <p className="text-lg font-bold text-emerald-600 font-display mt-0.5">₹{viewingPromoter.royaltyEarned.toLocaleString('en-IN')}</p>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Royalty Settled</span>
-                  <p className="text-lg font-bold text-slate-800 font-display mt-0.5">₹{viewingPromoter.royaltySettled.toLocaleString('en-IN')}</p>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Royalty Pending</span>
-                  <p className="text-lg font-bold text-brand-orange font-display mt-0.5">₹{viewingPromoter.royaltyPending.toLocaleString('en-IN')}</p>
-                </div>
-              </div>
+              {promoterTab === 'overview' ? (
+                <>
+                  {/* Scorecard cards */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Earned (5%)</span>
+                      <p className="text-lg font-bold text-emerald-600 font-display mt-0.5">₹{viewingPromoter.royaltyEarned.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Paid</span>
+                      <p className="text-lg font-bold text-slate-800 font-display mt-0.5">₹{viewingPromoter.royaltySettled.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl text-center">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Pending</span>
+                      <p className="text-lg font-bold text-brand-orange font-display mt-0.5">₹{viewingPromoter.royaltyPending.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
 
-              {/* Monthly Trend Chart */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-500 uppercase">Monthly Royalty Accrual History (₹)</h4>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={mockRoyaltyTrend} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="month" fontSize={10} stroke="#94a3b8" />
-                      <YAxis fontSize={10} stroke="#94a3b8" />
-                      <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
-                      <Bar dataKey="royalty" fill="#f97316" radius={[4, 4, 0, 0]} name="Royalty Paid" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+                  {/* Monthly Trend Chart */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase">Monthly Royalty Accrual History (₹)</h4>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={mockRoyaltyTrend} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="month" fontSize={10} stroke="#94a3b8" />
+                          <YAxis fontSize={10} stroke="#94a3b8" />
+                          <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
+                          <Bar dataKey="royalty" fill="#f97316" radius={[4, 4, 0, 0]} name="Royalty Paid" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
 
-              {/* Mapped retailers table preview */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-500 uppercase">Mapped Retailers & Outlets</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
-                        <th className="px-4 py-2.5">Shop Name</th>
-                        <th className="px-4 py-2.5">Owner</th>
-                        <th className="px-4 py-2.5">City</th>
-                        <th className="px-4 py-2.5 text-right">Net Sales</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      <tr>
-                        <td className="px-4 py-2.5 font-bold text-slate-800">Walk Easy Footwear</td>
-                        <td className="px-4 py-2.5 text-slate-400">Dinesh Shah</td>
-                        <td className="px-4 py-2.5 text-slate-500">Mumbai</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-slate-900">₹18,50,000</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-2.5 font-bold text-slate-800">Apex Sole Distributors</td>
-                        <td className="px-4 py-2.5 text-slate-400">Manish Joshi</td>
-                        <td className="px-4 py-2.5 text-slate-500">Pune</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-slate-900">₹1,50,000</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                  {/* Mapped retailers table preview */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase">Mapped Retailers & Outlets</h4>
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
+                            <th className="px-4 py-2.5">Shop Name</th>
+                            <th className="px-4 py-2.5">Owner</th>
+                            <th className="px-4 py-2.5">City</th>
+                            <th className="px-4 py-2.5 text-right">Net Sales</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr>
+                            <td className="px-4 py-2.5 font-bold text-slate-800">Walk Easy Footwear</td>
+                            <td className="px-4 py-2.5 text-slate-400">Dinesh Shah</td>
+                            <td className="px-4 py-2.5 text-slate-500">Mumbai</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-slate-900">₹18,50,000</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 font-bold text-slate-800">Apex Sole Distributors</td>
+                            <td className="px-4 py-2.5 text-slate-400">Manish Joshi</td>
+                            <td className="px-4 py-2.5 text-slate-500">Pune</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-slate-900">₹1,50,000</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* HUDDO-UPDATE: Promoters — Revenue billing chain display */
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                    Company-to-Retailer Billing Chain
+                  </h4>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-xs font-semibold text-slate-700">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
+                        <tr>
+                          <th className="px-4 py-2.5">Date</th>
+                          <th className="px-4 py-2.5">Retailer Name</th>
+                          <th className="px-4 py-2.5">City</th>
+                          <th className="px-4 py-2.5">Invoice No</th>
+                          <th className="px-4 py-2.5 text-right">Amount (₹)</th>
+                          <th className="px-4 py-2.5 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {revenueBillings.slice((billingPage - 1) * itemsPerBillingPage, billingPage * itemsPerBillingPage).length > 0 ? (
+                          revenueBillings.slice((billingPage - 1) * itemsPerBillingPage, billingPage * itemsPerBillingPage).map(bill => (
+                            <tr key={bill.id}>
+                              <td className="px-4 py-2.5 text-slate-500">{bill.date}</td>
+                              <td className="px-4 py-2.5 text-slate-900 font-bold">{bill.shopName}</td>
+                              <td className="px-4 py-2.5 text-slate-500">{bill.city}</td>
+                              <td className="px-4 py-2.5 font-mono text-slate-700 font-bold">{bill.id}</td>
+                              <td className="px-4 py-2.5 text-right text-slate-900 font-bold">₹{bill.total.toLocaleString('en-IN')}</td>
+                              <td className="px-4 py-2.5 text-right">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${bill.status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                  {bill.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="px-4 py-8 text-center text-slate-400 font-medium">
+                              No billings registered under retailers linked to this promoter yet.
+                            </td>
+                          </tr>
+                        )}
+                        {revenueBillings.length > 0 && (
+                          <tr className="bg-slate-50 font-bold text-slate-900">
+                            <td colSpan="4" className="px-4 py-3 text-right">Total Net Revenue:</td>
+                            <td className="px-4 py-3 text-right text-brand-orange" colSpan="2">₹{revenueBillings.reduce((sum, b) => sum + b.total, 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
 
+                  {/* Inner table pagination */}
+                  {revenueBillings.length > itemsPerBillingPage && (
+                    <div className="flex justify-between items-center pt-2">
+                      <button 
+                        type="button"
+                        onClick={() => setBillingPage(p => Math.max(p - 1, 1))}
+                        disabled={billingPage === 1}
+                        className="px-2.5 py-1 border border-slate-200 rounded text-[10px] font-bold disabled:opacity-50"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-[10px] text-slate-400">Page {billingPage} of {Math.ceil(revenueBillings.length / itemsPerBillingPage)}</span>
+                      <button 
+                        type="button"
+                        onClick={() => setBillingPage(p => Math.min(p + 1, Math.ceil(revenueBillings.length / itemsPerBillingPage)))}
+                        disabled={billingPage === Math.ceil(revenueBillings.length / itemsPerBillingPage)}
+                        className="px-2.5 py-1 border border-slate-200 rounded text-[10px] font-bold disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

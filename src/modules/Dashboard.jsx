@@ -17,7 +17,8 @@ export default function Dashboard({ onNavigate }) {
     { title: "Total Orders", value: "48", icon: ShoppingCart, delta: "+8% this week", color: "text-brand-orange bg-orange-50" },
     { title: "Total Retailers", value: "5", icon: Store, delta: "1 Pending Verification", color: "text-blue-600 bg-blue-50" },
     { title: "Total Promoters", value: "3", icon: Award, delta: "2 Active now", color: "text-purple-600 bg-purple-50" },
-    { title: "Outstanding Payments", value: "₹2.34 L", icon: AlertCircle, delta: "2 Overdue reminders sent", color: "text-rose-600 bg-rose-50" },
+    // HUDDO-UPDATE: Dashboard — Label renamed from Outstanding to Total Payment
+    { title: "Total Payment", value: "₹2.34 L", icon: AlertCircle, delta: "2 Overdue reminders sent", color: "text-rose-600 bg-rose-50" },
     { title: "Active Employees", value: "3", icon: Users, delta: "Across 6 Departments", color: "text-slate-600 bg-slate-100" }
   ];
 
