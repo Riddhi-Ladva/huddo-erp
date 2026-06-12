@@ -1,0 +1,475 @@
+import React, { useState } from 'react';
+import { 
+  ShoppingBag, Trash2, CreditCard, ChevronRight, CheckCircle2, 
+  Upload, Search, Filter, AlertTriangle, AlertCircle, ShoppingCart
+} from 'lucide-react';
+
+import { mockProducts } from '../mockData/mockProducts';
+import { mockOrders } from '../mockData/mockOrders';
+import CustomModal from '../components/CustomModal';
+
+export default function PlaceOrder({ showToast, onNavigate }) {
+  const [products, setProducts] = useState(mockProducts);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  
+  // Selected variant tracking per product (keys: product.id, value: variant.id)
+  const [selectedVariants, setSelectedVariants] = useState(() => {
+    const initial = {};
+    products.forEach(p => {
+      // Pick first in-stock variant if available
+      const inStock = p.variants.find(v => v.stock > 0);
+      initial[p.id] = inStock ? inStock.id : p.variants[0].id;
+    });
+    return initial;
+  });
+
+  // Shopping Cart state: array of items: { product, variant, quantity }
+  const [cart, setCart] = useState([]);
+  
+  // Checkout modal controls
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [utrNumber, setUtrNumber] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState('');
+
+  // Categories extraction
+  const categories = ['All', ...new Set(products.map(p => p.category))];
+
+  // Filter products
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCat = selectedCategory === 'All' || p.category === selectedCategory;
+    return matchesSearch && matchesCat;
+  });
+
+  const handleVariantChange = (productId, variantId) => {
+    setSelectedVariants(prev => ({
+      ...prev,
+      [productId]: variantId
+    }));
+  };
+
+  const handleAddToCart = (product, variant) => {
+    if (variant.stock <= 0) {
+      showToast("Cannot add out of stock variant.", "error");
+      return;
+    }
+
+    // Check if variant already exists in cart
+    const existingIndex = cart.findIndex(item => item.variant.id === variant.id);
+    if (existingIndex > -1) {
+      const currentQty = cart[existingIndex].quantity;
+      if (currentQty >= variant.stock) {
+        showToast(`Cannot exceed available stock of ${variant.stock} pairs.`, "error");
+        return;
+      }
+      const newCart = [...cart];
+      newCart[existingIndex].quantity += 1;
+      setCart(newCart);
+    } else {
+      setCart([...cart, { product, variant, quantity: 1 }]);
+    }
+    showToast(`Added ${product.name} (${variant.color} / Size ${variant.size}) to cart.`, "success");
+  };
+
+  const updateCartQuantity = (variantId, amount) => {
+    const itemIndex = cart.findIndex(item => item.variant.id === variantId);
+    if (itemIndex === -1) return;
+
+    const item = cart[itemIndex];
+    const newQty = item.quantity + amount;
+
+    if (newQty <= 0) {
+      // Remove from cart
+      setCart(cart.filter(it => it.variant.id !== variantId));
+      showToast("Item removed from cart.", "success");
+    } else if (newQty > item.variant.stock) {
+      showToast(`Stock limit reached! Only ${item.variant.stock} pairs available.`, "error");
+    } else {
+      const newCart = [...cart];
+      newCart[itemIndex].quantity = newQty;
+      setCart(newCart);
+    }
+  };
+
+  const removeFromCart = (variantId) => {
+    setCart(cart.filter(item => item.variant.id !== variantId));
+    showToast("Item removed from cart.", "success");
+  };
+
+  // Cart financial summary
+  const subtotal = cart.reduce((sum, item) => sum + (item.variant.price * item.quantity), 0);
+
+  // Screenshot handler
+  const handleScreenshotChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPaymentScreenshot(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCheckoutSubmit = (e) => {
+    e.preventDefault();
+    if (!utrNumber.trim()) {
+      showToast("Please enter a valid UTR transaction number.", "error");
+      return;
+    }
+    if (!screenshotPreview) {
+      showToast("Please upload payment receipt screenshot.", "error");
+      return;
+    }
+
+    // Submit new order simulation
+    const newOrderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+    const today = new Date().toISOString().split('T')[0];
+    const newOrderObj = {
+      id: newOrderId,
+      date: today,
+      items: cart.map(item => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        variant: `Size ${item.variant.size} / ${item.variant.color}`,
+        quantity: item.quantity,
+        price: item.variant.price
+      })),
+      totalAmount: subtotal,
+      paymentStatus: "Pending", // Pending verification
+      orderStatus: "Submitted",
+      utr: utrNumber,
+      paymentScreenshot: screenshotPreview,
+      notes: orderNotes,
+      timeline: [
+        { status: "Submitted", timestamp: `${today} 09:00 PM`, description: "Order submitted with UTR proof by Retailer" }
+      ]
+    };
+
+    // Prepend to mockOrders
+    mockOrders.unshift(newOrderObj);
+
+    // Deduct stock in local mock memory
+    cart.forEach(cartItem => {
+      const prod = products.find(p => p.id === cartItem.product.id);
+      if (prod) {
+        const vr = prod.variants.find(v => v.id === cartItem.variant.id);
+        if (vr) {
+          vr.stock -= cartItem.quantity;
+        }
+      }
+    });
+
+    // Reset cart and checkout states
+    setCart([]);
+    setIsCheckoutOpen(false);
+    setUtrNumber('');
+    setOrderNotes('');
+    setPaymentScreenshot(null);
+    setScreenshotPreview('');
+
+    showToast(`Order ${newOrderId} submitted successfully! Pending CM approval.`, "success");
+    // Redirect to orders page
+    onNavigate('My Orders');
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Title */}
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 font-display">Place New Bulk Order</h1>
+        <p className="text-xs text-slate-500 font-medium font-sans">Browse catalog variants, add products, review subtotals, and submit transaction confirmation.</p>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+        
+        {/* Left 2 Cols: Catalog Browser */}
+        <div className="xl:col-span-2 space-y-4">
+          
+          {/* Controls: Search and Filter Tabs */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-4 py-2 w-full text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange bg-white font-medium text-slate-700"
+              />
+            </div>
+            
+            {/* Category tabs */}
+            <div className="flex gap-1.5 overflow-x-auto w-full md:w-auto scrollbar-none">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors shrink-0 ${
+                    selectedCategory === cat
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'border border-slate-200 text-slate-500 bg-white hover:text-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Product Grid */}
+          {filteredProducts.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {filteredProducts.map(product => {
+                const activeVariantId = selectedVariants[product.id];
+                const activeVariant = product.variants.find(v => v.id === activeVariantId) || product.variants[0];
+
+                return (
+                  <div key={product.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+                    
+                    {/* Upper content */}
+                    <div>
+                      <div className="relative h-44 bg-slate-100 overflow-hidden">
+                        <img 
+                          src={product.image} 
+                          alt={product.name} 
+                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" 
+                        />
+                        <span className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          {product.category}
+                        </span>
+                      </div>
+
+                      <div className="p-4 space-y-2.5">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-800 font-display line-clamp-1">{product.name}</h3>
+                          <p className="text-[10px] text-slate-400 font-medium line-clamp-2 mt-0.5">{product.description}</p>
+                        </div>
+
+                        {/* Variants details */}
+                        <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase">Select Color & Size Variant</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {product.variants.map(v => (
+                              <button
+                                key={v.id}
+                                onClick={() => handleVariantChange(product.id, v.id)}
+                                className={`px-2 py-1 text-[10px] font-bold border rounded-md transition-colors ${
+                                  v.id === activeVariantId
+                                    ? 'border-brand-orange bg-orange-50/20 text-brand-orange'
+                                    : 'border-slate-200 text-slate-600 hover:border-slate-350'
+                                } ${v.stock === 0 ? 'opacity-40 line-through' : ''}`}
+                              >
+                                {v.color} / S-{v.size}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer / Cart controls */}
+                    <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <div>
+                        <span className="text-xs text-slate-400 font-bold">Dealer Price</span>
+                        <p className="text-base font-extrabold text-slate-850 font-display">₹{activeVariant.price.toLocaleString('en-IN')}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={`block text-[9px] font-bold ${
+                          activeVariant.stock === 0 ? 'text-rose-500' :
+                          activeVariant.stock <= 5 ? 'text-amber-500' : 'text-slate-400'
+                        }`}>
+                          {activeVariant.stock === 0 ? 'Out of Stock' :
+                           activeVariant.stock <= 5 ? `Only ${activeVariant.stock} left` : `Stock: ${activeVariant.stock} pairs`}
+                        </span>
+                        
+                        <button
+                          onClick={() => handleAddToCart(product, activeVariant)}
+                          disabled={activeVariant.stock === 0}
+                          className="mt-1 px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          <span>Add to Cart</span>
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+              <AlertCircle className="w-10 h-10 text-slate-350 mx-auto mb-3" />
+              <p className="text-slate-500 text-xs font-semibold">No footwear matching catalog filters.</p>
+            </div>
+          )}
+
+        </div>
+
+        {/* Right Col: Cart Summary */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
+          
+          {/* Header */}
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <ShoppingBag className="w-4 h-4 text-brand-orange" />
+              <span>Shopping Cart ({cart.length})</span>
+            </h3>
+            {cart.length > 0 && (
+              <button 
+                onClick={() => { setCart([]); showToast("Cleared shopping cart.", "success"); }}
+                className="text-[10px] text-rose-600 hover:text-rose-700 font-bold hover:underline"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Cart items list */}
+          <div className="flex-1 divide-y divide-slate-100 max-h-[360px] overflow-y-auto min-h-[150px]">
+            {cart.length > 0 ? (
+              cart.map((item, idx) => (
+                <div key={idx} className="p-4 flex items-start justify-between gap-3 bg-white">
+                  <div className="text-xs">
+                    <h4 className="font-extrabold text-slate-800 font-display line-clamp-1">{item.product.name}</h4>
+                    <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase">{item.variant.color} / Size {item.variant.size}</p>
+                    <span className="text-[11px] font-bold text-slate-700 mt-1 block">₹{item.variant.price} × {item.quantity}</span>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-2.5">
+                    {/* Quantity selectors */}
+                    <div className="flex items-center border border-slate-200 rounded bg-slate-50">
+                      <button 
+                        onClick={() => updateCartQuantity(item.variant.id, -1)}
+                        className="w-5.5 h-5.5 flex items-center justify-center text-slate-500 font-bold hover:bg-slate-200 transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center text-xs font-bold text-slate-800">{item.quantity}</span>
+                      <button 
+                        onClick={() => updateCartQuantity(item.variant.id, 1)}
+                        className="w-5.5 h-5.5 flex items-center justify-center text-slate-500 font-bold hover:bg-slate-200 transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <button 
+                      onClick={() => removeFromCart(item.variant.id)}
+                      className="text-slate-400 hover:text-rose-600 p-0.5 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs font-semibold flex flex-col items-center justify-center h-full gap-2">
+                <ShoppingCart className="w-8 h-8 text-slate-300" />
+                <span>Your cart is empty.<br />Add products from catalog.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Subtotal & Checkout */}
+          <div className="p-4 border-t border-slate-150 bg-slate-50">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-4">
+              <span>Order Subtotal</span>
+              <span className="text-base text-slate-900 font-display">₹{subtotal.toLocaleString('en-IN')}</span>
+            </div>
+
+            <button
+              onClick={() => setIsCheckoutOpen(true)}
+              disabled={cart.length === 0}
+              className="w-full py-2.5 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:bg-slate-300 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Checkout Order</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Checkout Modal Overlay */}
+      <CustomModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        title="Submit Payment Reference"
+        onConfirm={handleCheckoutSubmit}
+        confirmText="Submit Order"
+      >
+        <form className="space-y-4">
+          
+          {/* Summary */}
+          <div className="bg-orange-50/20 border border-orange-100 rounded-lg p-3 text-xs text-slate-700">
+            <span className="font-bold text-brand-orange uppercase block mb-1">Payment Instructions</span>
+            <p className="font-semibold text-slate-600">
+              Please transfer <span className="font-extrabold text-slate-900 text-sm">₹{subtotal.toLocaleString('en-IN')}</span> to the official company current account, upload the transaction receipt screenshot, and enter the UTR code below.
+            </p>
+          </div>
+
+          {/* Screenshot Upload */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-550 uppercase mb-1">Upload Payment Screenshot *</label>
+            <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100/50 transition-colors relative cursor-pointer">
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleScreenshotChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              {screenshotPreview ? (
+                <div className="space-y-2 text-center w-full">
+                  <img src={screenshotPreview} alt="Receipt preview" className="max-h-28 mx-auto rounded object-contain border border-slate-200" />
+                  <span className="text-[10px] text-brand-orange font-bold hover:underline block">Change Image</span>
+                </div>
+              ) : (
+                <div className="text-center space-y-1 text-slate-400">
+                  <Upload className="w-6 h-6 mx-auto mb-1 text-slate-400" />
+                  <span className="text-[11px] font-bold text-slate-700 block">Click to select photo</span>
+                  <span className="text-[9px]">PNG, JPG up to 5MB</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* UTR Input */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-550 uppercase mb-1">UTR / Transaction ID *</label>
+            <input 
+              type="text" 
+              placeholder="e.g. UTR102938475"
+              value={utrNumber}
+              onChange={(e) => setUtrNumber(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 bg-white font-semibold text-slate-705"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-550 uppercase mb-1">Order Notes (Optional)</label>
+            <textarea 
+              rows="2.5" 
+              placeholder="Delivery instructions, shipping preference..."
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 bg-white font-medium text-slate-705"
+            />
+          </div>
+
+        </form>
+      </CustomModal>
+
+    </div>
+  );
+}

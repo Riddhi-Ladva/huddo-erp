@@ -33,6 +33,7 @@ import Inventory from './modules/Inventory';
 import Purchase from './modules/Purchase';
 import Customers from './modules/Customers';
 import PettyCash from './modules/PettyCash';
+import RetailerModule from './modules/retailer/RetailerModule';
 
 // Navigation Schema with Sections & Mapped Icons
 const NAV_MENU = [
@@ -64,7 +65,8 @@ const NAV_MENU = [
       { id: "Retailers", label: "Retailers", icon: Store, component: Retailers },
       { id: "Products", label: "Products", icon: Package, component: Products },
       { id: "Orders", label: "Orders", icon: ShoppingCart, component: Orders },
-      { id: "Customers", label: "Customers", icon: Users, component: Customers }
+      { id: "Customers", label: "Customers", icon: Users, component: Customers },
+      { id: "RetailerPanel", label: "Retailer Panel (Mock)", icon: Store, component: RetailerModule }
     ]
   },
   {
@@ -171,6 +173,17 @@ export default function App() {
   const searchedItems = searchQuery.trim() === '' ? [] : allNavItems.filter(item => 
     item.label.toLowerCase().includes(searchQuery.toLowerCase()) && canViewItem(item.id)
   );
+
+  // HUDDO-UPDATE: Retailer Panel - Full Screen override
+  if (currentRole.toLowerCase() === 'retailer') {
+    return (
+      <RetailerModule 
+        userRole={currentRole} 
+        showToast={showToast} 
+        onSwitchRole={(role) => handleRoleChange(role)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-slate-50 relative font-sans antialiased text-slate-800">
@@ -339,6 +352,7 @@ export default function App() {
                       <option value="City Manager">City Manager</option>
                       <option value="Finance Manager">Finance Manager</option>
                       <option value="Sales Executive">Sales Executive</option>
+                      <option value="Retailer">Retailer</option>
                     </select>
                   </div>
                   
