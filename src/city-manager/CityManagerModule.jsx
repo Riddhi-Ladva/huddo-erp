@@ -1,0 +1,637 @@
+// src/city-manager/CityManagerModule.jsx
+import { useState, useEffect, useRef } from 'react';
+
+// Import Layout
+import CityManagerLayout from './components/CityManagerLayout';
+import { Toast, SkeletonLoader } from './components/Common';
+import { formatCurrency } from './cityManagerUtils';
+
+// Import Mock Data
+import {
+  retailers as initialRetailers,
+  orders as initialOrders,
+  leads as initialLeads,
+  visitLogs as initialVisitLogs,
+  promoters as initialPromoters,
+  myIncentive,
+  cityTargets as initialCityTargets,
+  monthlyRevenueData,
+  retailerSalesData,
+  pendingApprovals as initialPendingApprovals,
+  notifications as initialNotifications
+} from './cityManagerMockData';
+
+// Import Pages
+import Dashboard from './pages/Dashboard';
+import Retailers from './pages/Retailers';
+import OnboardRetailer from './pages/OnboardRetailer';
+import Orders from './pages/Orders';
+import Approvals from './pages/Approvals';
+import VisitLogs from './pages/VisitLogs';
+import Leads from './pages/Leads';
+import PromoterView from './pages/PromoterView';
+import SalesMonitoring from './pages/SalesMonitoring';
+import TargetManagement from './pages/TargetManagement';
+import MyIncentive from './pages/MyIncentive';
+import Reports from './pages/Reports';
+import Notifications from './pages/Notifications';
+
+export default function CityManagerModule({ showToast: parentShowToast, onSwitchRole }) {
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Global collections state
+  const [retailers, setRetailers] = useState(initialRetailers);
+  const [orders, setOrders] = useState(initialOrders);
+  const [leads, setLeads] = useState(initialLeads);
+  const [visitLogs, setVisitLogs] = useState(initialVisitLogs);
+  const [notifications, setNotifications] = useState(initialNotifications);
+  const [promoters] = useState(initialPromoters);
+  const [cityTargets, setCityTargets] = useState(initialCityTargets);
+  const [pendingApprovals, setPendingApprovals] = useState(initialPendingApprovals);
+
+  // Prefilled / Deep Link States
+  const [prefilledLead, setPrefilledLead] = useState(null);
+  const [initialPlaceOrderOpen, setInitialPlaceOrderOpen] = useState(false);
+  const [initialBookingRetailerId, setInitialBookingRetailerId] = useState('');
+  const [initialLogVisitOpen, setInitialLogVisitOpen] = useState(false);
+  const [initialTargetId, setInitialTargetId] = useState('');
+  const [initialVisitType, setInitialVisitType] = useState('Retailer Visit');
+
+  const [approvalHistory, setApprovalHistory] = useState([
+    { id: "H001", item: "Order ORD-2026-0537 from Star Shoes", type: "Large Order", decision: "Approved", date: "2026-06-08", reason: "Payment receipt verified" },
+    { id: "H002", item: "Retailer Classic Comfort", type: "Retailer Registration", decision: "Approved", date: "2026-06-05", reason: "Onboarding documents complete" }
+  ]);
+
+  const timerRef = useRef(null);
+
+  const handleTabChange = (tab) => {
+    setLoading(true);
+    setActiveTab(tab);
+
+    // Clear deep link configs unless they match the tab being navigated to
+    if (tab !== 'Orders') {
+      setInitialPlaceOrderOpen(false);
+      setInitialBookingRetailerId('');
+    }
+    if (tab !== 'Visit Logs') {
+      setInitialLogVisitOpen(false);
+      setInitialTargetId('');
+      setInitialVisitType('Retailer Visit');
+    }
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setLoading(false);
+    }, 300);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const showToast = (message, type = 'success') => {
+    if (parentShowToast) {
+      parentShowToast(message, type);
+    } else {
+      setToast({ message, type });
+    }
+  };
+
+  // ────────────────────────────────────────────────────────────────────────
+  // BUSINESS OPERATIONS & MUTATIONS
+  // ────────────────────────────────────────────────────────────────────────
+
+  // 1. Onboard Retailer Wizard submit handler
+  const handleOnboardRetailer = (retailerData) => {
+    const newId = `R00${retailers.length + 1}`;
+    const newRetailer = {
+      id: newId,
+      ...retailerData,
+      status: 'Pending Verification',
+      totalOrders: 0,
+      totalRevenue: 0,
+      pendingPayment: 0,
+      joinedDate: new Date().toISOString().split('T')[0],
+      lastOrderDate: null,
+      lastVisitDate: null,
+      communicationHistory: [
+        { date: new Date().toISOString().split('T')[0], type: 'Visit', note: retailerData.notes || 'Onboarded' }
+      ]
+    };
+    setRetailers(prev => [...prev, newRetailer]);
+
+    // Create pending approval item
+    const newApproval = {
+      id: `APR00${pendingApprovals.length + 1}`,
+      type: 'Retailer Registration',
+      retailer: retailerData.businessName,
+      city: 'Ahmedabad',
+      date: new Date().toISOString().split('T')[0],
+      urgency: 'Medium'
+    };
+    setPendingApprovals(prev => [newApproval, ...prev]);
+
+    // Create notification alert
+    const newNotif = {
+      id: `N00${notifications.length + 1}`,
+      type: 'system',
+      message: `New retailer ${retailerData.businessName} registration submitted — pending your verification`,
+      time: 'Just now',
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+
+    // Reset prefilled lead config
+    setPrefilledLead(null);
+  };
+
+  // 2. Base Approvals Actions
+  const handleApproveApproval = (approvalId) => {
+    const item = pendingApprovals.find(a => a.id === approvalId);
+    if (!item) return;
+
+    setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
+
+    let logItem = '';
+    if (item.type === 'Large Order') {
+      setOrders(prev => prev.map(o => {
+        if (o.id === item.orderId) {
+          return { ...o, status: 'Approved', requiresCityApproval: false };
+        }
+        return o;
+      }));
+      logItem = `Order ${item.orderId}`;
+    } else if (item.type === 'Retailer Registration') {
+      setRetailers(prev => prev.map(r => {
+        if (r.businessName === item.retailer) {
+          return { ...r, status: 'Active' };
+        }
+        return r;
+      }));
+      logItem = `Retailer ${item.retailer}`;
+    }
+
+    const newHistory = {
+      id: `H-${Date.now()}`,
+      item: logItem,
+      type: item.type,
+      decision: 'Approved',
+      date: new Date().toISOString().split('T')[0],
+      reason: 'Approved by City Manager'
+    };
+    setApprovalHistory(prev => [newHistory, ...prev]);
+  };
+
+  const handleRejectApproval = (approvalId, reason) => {
+    const item = pendingApprovals.find(a => a.id === approvalId);
+    if (!item) return;
+
+    setPendingApprovals(prev => prev.filter(a => a.id !== approvalId));
+
+    let logItem = '';
+    if (item.type === 'Large Order') {
+      setOrders(prev => prev.map(o => {
+        if (o.id === item.orderId) {
+          return { ...o, status: 'Cancelled', requiresCityApproval: false };
+        }
+        return o;
+      }));
+      logItem = `Order ${item.orderId}`;
+    } else if (item.type === 'Retailer Registration') {
+      setRetailers(prev => prev.map(r => {
+        if (r.businessName === item.retailer) {
+          return { ...r, status: 'Rejected' };
+        }
+        return r;
+      }));
+      logItem = `Retailer ${item.retailer}`;
+    }
+
+    const newHistory = {
+      id: `H-${Date.now()}`,
+      item: logItem,
+      type: item.type,
+      decision: 'Rejected',
+      date: new Date().toISOString().split('T')[0],
+      reason: reason
+    };
+    setApprovalHistory(prev => [newHistory, ...prev]);
+  };
+
+  // 3. Retailers view Direct Verification Shortcuts
+  const handleApproveRetailer = (retailerId) => {
+    const retailer = retailers.find(r => r.id === retailerId);
+    if (!retailer) return;
+    const match = pendingApprovals.find(a => a.retailer === retailer.businessName && a.type === 'Retailer Registration');
+    if (match) {
+      handleApproveApproval(match.id);
+    } else {
+      setRetailers(prev => prev.map(r => {
+        if (r.id === retailerId) return { ...r, status: 'Active' };
+        return r;
+      }));
+    }
+  };
+
+  const handleRejectRetailer = (retailerId, reason) => {
+    const retailer = retailers.find(r => r.id === retailerId);
+    if (!retailer) return;
+    const match = pendingApprovals.find(a => a.retailer === retailer.businessName && a.type === 'Retailer Registration');
+    if (match) {
+      handleRejectApproval(match.id, reason);
+    } else {
+      setRetailers(prev => prev.map(r => {
+        if (r.id === retailerId) return { ...r, status: 'Rejected' };
+        return r;
+      }));
+    }
+  };
+
+  // 4. Retailer notes/communication logging
+  const handleAddCommunication = (retailerId, commData) => {
+    setRetailers(prev => prev.map(r => {
+      if (r.id === retailerId) {
+        return {
+          ...r,
+          communicationHistory: [commData, ...(r.communicationHistory || [])],
+          lastVisitDate: commData.type === 'Visit' ? commData.date : r.lastVisitDate
+        };
+      }
+      return r;
+    }));
+  };
+
+  // 5. Retailers Outstanding clearing
+  const handleMarkPaid = (retailerId) => {
+    setRetailers(prev => prev.map(r => {
+      if (r.id === retailerId) {
+        return { ...r, pendingPayment: 0 };
+      }
+      return r;
+    }));
+  };
+
+  // 6. Direct Place Order shortcut from Retailer card
+  const handlePlaceOrderClick = (retailer) => {
+    setInitialBookingRetailerId(retailer.id);
+    setInitialPlaceOrderOpen(true);
+    handleTabChange('Orders');
+  };
+
+  // 7. Direct Log Visit shortcut from Retailer card
+  const handleLogVisitClick = (retailer) => {
+    setInitialTargetId(retailer.id);
+    setInitialVisitType('Retailer Visit');
+    setInitialLogVisitOpen(true);
+    handleTabChange('Visit Logs');
+  };
+
+  // 8. Place Order submits
+  const handlePlaceOrder = (newOrder) => {
+    setOrders(prev => [newOrder, ...prev]);
+
+    if (newOrder.requiresCityApproval) {
+      const newApproval = {
+        id: `APR00${pendingApprovals.length + 1}`,
+        type: 'Large Order',
+        orderId: newOrder.id,
+        retailer: newOrder.retailerName,
+        amount: newOrder.amount,
+        items: newOrder.items.length,
+        date: newOrder.orderDate,
+        urgency: newOrder.amount > 30000 ? 'High' : 'Medium'
+      };
+      setPendingApprovals(prev => [newApproval, ...prev]);
+
+      const newNotif = {
+        id: `N00${notifications.length + 1}`,
+        type: 'approval',
+        message: `Order ${newOrder.id} from ${newOrder.retailerName} (${formatCurrency(newOrder.amount)}) awaiting your approval`,
+        time: 'Just now',
+        read: false
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+    }
+
+    setRetailers(prev => prev.map(r => {
+      if (r.id === newOrder.retailerId) {
+        return {
+          ...r,
+          totalOrders: r.totalOrders + 1,
+          totalRevenue: r.totalRevenue + newOrder.amount,
+          lastOrderDate: newOrder.orderDate
+        };
+      }
+      return r;
+    }));
+  };
+
+  const handleApproveOrder = (orderId) => {
+    const match = pendingApprovals.find(a => a.orderId === orderId);
+    if (match) {
+      handleApproveApproval(match.id);
+    } else {
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId) return { ...o, status: 'Approved', requiresCityApproval: false };
+        return o;
+      }));
+    }
+  };
+
+  const handleRejectOrder = (orderId, reason) => {
+    const match = pendingApprovals.find(a => a.orderId === orderId);
+    if (match) {
+      handleRejectApproval(match.id, reason);
+    } else {
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId) return { ...o, status: 'Cancelled', requiresCityApproval: false };
+        return o;
+      }));
+    }
+  };
+
+  // 9. Visit logs submit
+  const handleLogVisit = (newLog) => {
+    setVisitLogs(prev => [newLog, ...prev]);
+
+    if (newLog.visitType === 'Retailer Visit') {
+      setRetailers(prev => prev.map(r => {
+        if (r.businessName === newLog.retailerName) {
+          const newComm = {
+            date: newLog.date,
+            type: 'Visit',
+            note: `Logged via check-in: ${newLog.purpose}. Outcome: ${newLog.outcome}`
+          };
+          return {
+            ...r,
+            lastVisitDate: newLog.date,
+            communicationHistory: [newComm, ...(r.communicationHistory || [])]
+          };
+        }
+        return r;
+      }));
+    } else if (newLog.visitType === 'Lead Visit') {
+      setLeads(prev => prev.map(l => {
+        const cleanLeadName = newLog.retailerName.replace(' (Lead)', '');
+        if (l.businessName === cleanLeadName) {
+          return {
+            ...l,
+            lastContact: newLog.date,
+            notes: newLog.outcome
+          };
+        }
+        return l;
+      }));
+    }
+  };
+
+  // 10. Leads management
+  const handleAddLead = (newLead) => {
+    setLeads(prev => [newLead, ...prev]);
+  };
+
+  const handleUpdateLeadStage = (leadId, newStage) => {
+    setLeads(prev => prev.map(l => {
+      if (l.id === leadId) return { ...l, status: newStage };
+      return l;
+    }));
+  };
+
+  const handleConvertLead = (lead) => {
+    setPrefilledLead(lead);
+    handleTabChange('Onboard Retailer');
+  };
+
+  // 11. Target Quota Set
+  const handleSaveRetailerTargets = (newTargets) => {
+    setCityTargets(prev => {
+      const updated = prev.retailerTargets.map(t => {
+        if (newTargets[t.retailerId] !== undefined) {
+          return { ...t, target: Number(newTargets[t.retailerId]) };
+        }
+        return t;
+      });
+      return { ...prev, retailerTargets: updated };
+    });
+  };
+
+  // 12. Notifications Inbox mark read
+  const handleMarkRead = (id) => {
+    setNotifications(prev => prev.map(n => {
+      if (n.id === id) return { ...n, read: true };
+      return n;
+    }));
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  // Render tab contents
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case 'Dashboard':
+        return (
+          <Dashboard
+            retailers={retailers}
+            orders={orders}
+            pendingApprovals={pendingApprovals}
+            visitLogs={visitLogs}
+            monthlyRevenueData={monthlyRevenueData}
+            retailerSalesData={retailerSalesData}
+            onApprove={handleApproveApproval}
+            onReject={(id) => {
+              handleTabChange('Approvals');
+              showToast(`Review pending items to reject ID ${id}`, 'info');
+            }}
+            onNavigate={handleTabChange}
+            showToast={showToast}
+          />
+        );
+      case 'My Retailers':
+        return (
+          <Retailers
+            key="all-retailers"
+            retailers={retailers}
+            orders={orders}
+            promoters={promoters}
+            onApproveRetailer={handleApproveRetailer}
+            onRejectRetailer={handleRejectRetailer}
+            onAddCommunication={handleAddCommunication}
+            onLogVisitClick={handleLogVisitClick}
+            onPlaceOrderClick={handlePlaceOrderClick}
+            onMarkPaid={handleMarkPaid}
+            onNavigate={handleTabChange}
+            showToast={showToast}
+          />
+        );
+      case 'Pending Verification':
+        return (
+          <Retailers
+            key="pending-retailers"
+            retailers={retailers}
+            orders={orders}
+            promoters={promoters}
+            onApproveRetailer={handleApproveRetailer}
+            onRejectRetailer={handleRejectRetailer}
+            onAddCommunication={handleAddCommunication}
+            onLogVisitClick={handleLogVisitClick}
+            onPlaceOrderClick={handlePlaceOrderClick}
+            onMarkPaid={handleMarkPaid}
+            onNavigate={handleTabChange}
+            showToast={showToast}
+            initialCategoryTab="Pending"
+          />
+        );
+      case 'Onboard Retailer':
+        return (
+          <OnboardRetailer
+            key={prefilledLead ? `prefilled-${prefilledLead.id}` : 'onboard-default'}
+            promoters={promoters}
+            onOnboardRetailer={handleOnboardRetailer}
+            onNavigate={handleTabChange}
+            showToast={showToast}
+            prefilledLead={prefilledLead}
+          />
+        );
+      case 'Orders':
+        return (
+          <Orders
+            key={initialBookingRetailerId ? `order-${initialBookingRetailerId}` : 'orders-default'}
+            orders={orders}
+            retailers={retailers}
+            onApproveOrder={handleApproveOrder}
+            onRejectOrder={handleRejectOrder}
+            onPlaceOrder={handlePlaceOrder}
+            showToast={showToast}
+            initialPlaceOrderOpen={initialPlaceOrderOpen}
+            initialBookingRetailerId={initialBookingRetailerId}
+          />
+        );
+      case 'Approvals':
+        return (
+          <Approvals
+            pendingApprovals={pendingApprovals}
+            approvalHistory={approvalHistory}
+            onApproveApproval={handleApproveApproval}
+            onRejectApproval={handleRejectApproval}
+            showToast={showToast}
+          />
+        );
+      case 'Visit Logs':
+        return (
+          <VisitLogs
+            key={initialTargetId ? `visit-${initialTargetId}` : 'visit-default'}
+            visitLogs={visitLogs}
+            retailers={retailers}
+            leads={leads}
+            onLogVisit={handleLogVisit}
+            showToast={showToast}
+            initialLogVisitOpen={initialLogVisitOpen}
+            initialTargetId={initialTargetId}
+            initialVisitType={initialVisitType}
+          />
+        );
+      case 'Market Leads':
+        return (
+          <Leads
+            leads={leads}
+            onAddLead={handleAddLead}
+            onUpdateLeadStage={handleUpdateLeadStage}
+            onConvertLead={handleConvertLead}
+            onNavigate={handleTabChange}
+            showToast={showToast}
+          />
+        );
+      case 'Promoter View':
+        return (
+          <PromoterView
+            promoters={promoters}
+            retailers={retailers}
+          />
+        );
+      case 'Sales Monitoring':
+        return (
+          <SalesMonitoring
+            retailers={retailers}
+            monthlyRevenueData={monthlyRevenueData}
+            retailerSalesData={retailerSalesData}
+            showToast={showToast}
+          />
+        );
+      case 'Targets':
+        return (
+          <TargetManagement
+            cityTargets={cityTargets}
+            onSaveRetailerTargets={handleSaveRetailerTargets}
+            showToast={showToast}
+          />
+        );
+      case 'My Incentive':
+        return (
+          <MyIncentive
+            myIncentive={myIncentive}
+          />
+        );
+      case 'Reports':
+        return (
+          <Reports
+            orders={orders}
+            retailers={retailers}
+            leads={leads}
+            visitLogs={visitLogs}
+            monthlyRevenueData={monthlyRevenueData}
+            retailerSalesData={retailerSalesData}
+            showToast={showToast}
+          />
+        );
+      case 'Notifications':
+        return (
+          <Notifications
+            notifications={notifications}
+            onMarkRead={handleMarkRead}
+            onMarkAllRead={handleMarkAllRead}
+            showToast={showToast}
+          />
+        );
+      default:
+        return <div className="p-8 text-center text-xs font-semibold text-slate-400">Section coming soon!</div>;
+    }
+  };
+
+  const pendingApprovalsCount = pendingApprovals.length;
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+  const pendingRetailersCount = retailers.filter(r => r.status === 'Pending Verification').length;
+
+  return (
+    <CityManagerLayout
+      activeTab={activeTab}
+      setActiveTab={handleTabChange}
+      pendingApprovalsCount={pendingApprovalsCount}
+      unreadNotificationsCount={unreadNotificationsCount}
+      pendingRetailersCount={pendingRetailersCount}
+      onSwitchRole={onSwitchRole}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+    >
+      {loading ? (
+        <SkeletonLoader type={activeTab === 'Dashboard' ? 'dashboard' : ['My Retailers', 'Pending Verification', 'Orders', 'Approvals', 'Visit Logs', 'Market Leads'].includes(activeTab) ? 'table' : 'cards'} />
+      ) : (
+        renderActiveTab()
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+    </CityManagerLayout>
+  );
+}

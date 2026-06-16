@@ -1,5 +1,10 @@
 // HUDDO-UPDATE: Core — Mock API engine intercepting fetch globally
 import { GEOGRAPHY, initialOrders, initialInvoices, initialEmployees, initialRetailers, initialInventory, initialDepartmentsDetails } from './mockData';
+// CM-MODULE: Import simulated Country Manager endpoints
+import { handleCountryManagerApi } from './modules/country-manager/mockApiCM';
+// PROMO-MODULE: Import simulated Promoter endpoints
+import { handlePromoterApi } from './modules/promoter/mockApiPromo';
+
 
 // Helper to initialize local storage data if not present
 const getOrSetLocal = (key, defaultVal) => {
@@ -49,6 +54,19 @@ window.fetch = async function (input, init) {
   const urlObj = new URL(url, window.location.origin);
   const params = Object.fromEntries(urlObj.searchParams.entries());
   const pathname = urlObj.pathname;
+
+  // CM-MODULE: Intercept Country Manager APIs
+  const cmResponse = await handleCountryManagerApi(pathname, method, body, params);
+  if (cmResponse) {
+    return cmResponse;
+  }
+
+  // PROMO-MODULE: Intercept Promoter APIs
+  const promoResponse = await handlePromoterApi(pathname, method, body, params);
+  if (promoResponse) {
+    return promoResponse;
+  }
+
 
   console.log(`[Mock API Interceptor] ${method} ${pathname}`, { params, body });
 

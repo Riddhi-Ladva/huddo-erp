@@ -34,6 +34,18 @@ import Purchase from './modules/Purchase';
 import Customers from './modules/Customers';
 import PettyCash from './modules/PettyCash';
 import RetailerModule from './modules/retailer/RetailerModule';
+// CM-MODULE: Import Country Manager Module
+import CountryManagerModule from './modules/country-manager/CountryManagerModule';
+// SM-MODULE: Import State Manager Module
+import StateManagerModule from './state-manager/StateManagerModule';
+// CTY-MODULE: Import City Manager Module
+import CityManagerModule from './city-manager/CityManagerModule';
+// PROMO-MODULE: Import Promoter Module
+import PromoterModule from './modules/promoter/PromoterModule';
+// EMPLOYEE-MODULE: Import Employee Module
+import EmployeeModule from './modules/employee/EmployeeModule';
+
+
 
 // Navigation Schema with Sections & Mapped Icons
 const NAV_MENU = [
@@ -56,7 +68,8 @@ const NAV_MENU = [
     items: [
       { id: "Employees", label: "Employees", icon: Users, component: Employees },
       { id: "Teams", label: "Teams", icon: UsersRound, component: Teams },
-      { id: "Promoters", label: "Promoters", icon: Award, component: Promoters }
+      { id: "Promoters", label: "Promoters", icon: Award, component: PromoterModule },
+      { id: "CountryManagers", label: "Country Managers", icon: Users, component: CountryManagerModule }
     ]
   },
   {
@@ -113,6 +126,9 @@ export default function App() {
   };
 
   const canViewItem = (itemId) => {
+    if (itemId === 'CountryManagers') {
+      return ["Founder", "CEO", "Admin"].includes(currentRole);
+    }
     if (itemId === 'Customers') {
       return ["Founder", "CEO", "Admin", "Country Manager", "State Manager", "City Manager"].includes(currentRole);
     }
@@ -184,6 +200,67 @@ export default function App() {
       />
     );
   }
+
+  // CM-MODULE: Country Manager Workspace - Full Screen override
+  if (currentRole.toLowerCase() === 'country manager') {
+    return (
+      <CountryManagerModule 
+        userRole={currentRole} 
+        showToast={showToast} 
+        onSwitchRole={(role) => handleRoleChange(role)}
+      />
+    );
+  }
+
+  // SM-MODULE: State Manager Workspace - Full Screen override
+  if (currentRole.toLowerCase() === 'state manager') {
+    return (
+      <StateManagerModule 
+        userRole={currentRole} 
+        showToast={showToast} 
+        onSwitchRole={(role) => handleRoleChange(role)}
+      />
+    );
+  }
+
+  // CTY-MODULE: City Manager Workspace - Full Screen override
+  if (currentRole.toLowerCase() === 'city manager') {
+    return (
+      <CityManagerModule 
+        userRole={currentRole} 
+        showToast={showToast} 
+        onSwitchRole={(role) => handleRoleChange(role)}
+      />
+    );
+  }
+
+  // PROMO-MODULE: Promoter Workspace - Full Screen override
+  if (currentRole.toLowerCase() === 'promoter') {
+    return (
+      <PromoterModule 
+        userRole={currentRole} 
+        showToast={showToast} 
+        onSwitchRole={(role) => handleRoleChange(role)}
+      />
+    );
+  }
+
+  // EMPLOYEE-MODULE: Employee Workspace - Full Screen override
+  const employeeRoles = [
+    'sales executive', 'sales manager', 'hr manager', 
+    'finance manager', 'inventory manager', 'purchase manager', 
+    'team member'
+  ];
+  if (employeeRoles.includes(currentRole.toLowerCase())) {
+    return (
+      <EmployeeModule 
+        userRole={currentRole} 
+        showToast={showToast} 
+        onSwitchRole={(role) => handleRoleChange(role)}
+      />
+    );
+  }
+
 
   return (
     <div className="min-h-screen flex bg-slate-50 relative font-sans antialiased text-slate-800">
@@ -353,7 +430,9 @@ export default function App() {
                       <option value="Finance Manager">Finance Manager</option>
                       <option value="Sales Executive">Sales Executive</option>
                       <option value="Retailer">Retailer</option>
+                      <option value="Promoter">Promoter</option>
                     </select>
+
                   </div>
                   
                   <button 
