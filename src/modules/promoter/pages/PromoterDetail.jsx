@@ -1,5 +1,5 @@
 // PROMO-MODULE: Promoter Detail page containing the 8-tab dashboard.
-// Strictly strips allocated territory fields, displays "Earned Royalty (5%)" label, and manages settlements.
+// Displays "Earned Royalty (5%)" label, and manages settlements.
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -430,97 +430,139 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
 
   return (
     <div className="space-y-6">
-      {/* Header Panel */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => onNavigate('list')}
-            className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900 font-display">{promoter.full_name}</h1>
-              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-bold text-[10px]">
-                {promoter.promoter_code}
-              </span>
-            </div>
+      {/* Header Panel (Only on Overview) */}
+      {activeTab === 'Overview' && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+          <div className="flex items-center gap-4">
+            {userRole !== 'Promoter' && (
+              <button 
+                onClick={() => onNavigate('list')}
+                className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
             
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                promoter.verification_status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : promoter.verification_status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {promoter.verification_status}
-              </span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                promoter.payment_status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : promoter.payment_status === 'Partial' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-              }`}>
-                Payment: {promoter.payment_status}
-              </span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                promoter.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {promoter.status}
-              </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-slate-900 font-display">{promoter.full_name}</h1>
+                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-bold text-[10px]">
+                  {promoter.promoter_code}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  promoter.verification_status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : promoter.verification_status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {promoter.verification_status}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  promoter.payment_status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : promoter.payment_status === 'Partial' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  Payment: {promoter.payment_status}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  promoter.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {promoter.status}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Header Actions */}
-        <div className="flex flex-wrap gap-2">
-          {userRole !== 'Promoter' && (
-            <>
-              <button 
-                onClick={() => onNavigate(`edit-${promoterId}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Edit Profile</span>
-              </button>
-              {promoter.verification_status === 'Pending' && (
+          {/* Header Actions */}
+          <div className="flex flex-wrap gap-2">
+            {userRole !== 'Promoter' && (
+              <>
                 <button 
-                  onClick={() => setIsVerifyOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-semibold rounded-lg transition-colors"
+                  onClick={() => onNavigate(`edit-${promoterId}`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                 >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Verify Promoter</span>
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Edit Profile</span>
                 </button>
-              )}
-              <button 
-                onClick={() => setIsMapOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Map Retailer</span>
-              </button>
-              <button 
-                onClick={() => setIsNotifSendOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send Notification</span>
-              </button>
-            </>
-          )}
+                {promoter.verification_status === 'Pending' && (
+                  <button 
+                    onClick={() => setIsVerifyOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Verify Promoter</span>
+                  </button>
+                )}
+                <button 
+                  onClick={() => setIsMapOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Map Retailer</span>
+                </button>
+                <button 
+                  onClick={() => setIsNotifSendOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Notification</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Tabs list */}
-      <div className="flex border-b border-slate-200 overflow-x-auto">
-        {['Overview', 'Retailers', 'Revenue', 'Royalty', 'Performance', 'Reports', 'Documents', 'Notifications'].map(t => (
-          <button
-            key={t}
-            onClick={() => setActiveTab(t)}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === t ? 'border-brand-orange text-brand-orange font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {/* Minimal Header on other pages for Admin/Founder role */}
+      {activeTab !== 'Overview' && userRole !== 'Promoter' && (
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => onNavigate('list')}
+              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 font-display">
+                {promoter.full_name} <span className="text-slate-400 font-normal">| {activeTab}</span>
+              </h1>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={() => setIsMapOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Map Retailer</span>
+            </button>
+            <button 
+              onClick={() => setIsNotifSendOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Send Notification</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs list (Only for Founder/Admin/etc role, not for the Promoter themselves) */}
+      {userRole !== 'Promoter' && (
+        <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
+          {['Overview', 'Retailers', 'Revenue', 'Royalty', 'Performance', 'Reports', 'Documents', 'Notifications'].map(t => (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
+                activeTab === t ? 'border-brand-orange text-brand-orange font-extrabold' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* TAB 1: OVERVIEW */}
       {activeTab === 'Overview' && dashboardData && (
@@ -584,7 +626,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
               <h3 className="text-xs font-bold text-slate-800 font-display mb-4">Monthly Revenue Trend</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <LineChart data={dashboardData.monthly_trend}>
+                  <LineChart data={dashboardData.monthly_trend} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
@@ -600,7 +642,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
               <h3 className="text-xs font-bold text-slate-800 font-display mb-4">Monthly Royalty Earned vs Paid</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart data={dashboardData.monthly_trend}>
+                  <BarChart data={dashboardData.monthly_trend} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} />
@@ -855,7 +897,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
                 {/* Overrides Table */}
                 <div className="md:col-span-2 space-y-2">
                   <span className="text-[10px] font-bold text-slate-400 uppercase block">Active Override Rules</span>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto text-xs">
                     <table className="w-full text-left border-collapse bg-white">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase">
@@ -910,7 +952,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
                 <div>Total Disbursed: <span className="font-bold text-emerald-600">₹{royaltyEarnings.summary.total_paid?.toLocaleString('en-IN') || 0}</span></div>
                 <div>Total Pending: <span className="font-bold text-rose-600">₹{royaltyEarnings.summary.total_pending?.toLocaleString('en-IN') || 0}</span></div>
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <DataTable
                   columns={[
                     { header: "Period", accessor: "period_month", render: (val, row) => <span>{row.period_year}-{String(val).padStart(2, '0')}</span> },
@@ -947,7 +989,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
                   </button>
                 )}
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <DataTable
                   columns={[
                     { header: "Settlement Period", accessor: "settlement_period", render: (val) => <span className="font-bold">{val}</span> },
@@ -1026,7 +1068,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
               <h3 className="text-xs font-bold text-slate-800 font-display mb-4">Revenue & Royalty Accrual Trends</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <LineChart data={performanceData.monthly_trend}>
+                  <LineChart data={performanceData.monthly_trend} margin={{ top: 5, right: 10, left: 25, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -1043,7 +1085,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
               <h3 className="text-xs font-bold text-slate-800 font-display mb-4">Quarterly Volume Statistics</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart data={performanceData.quarterly_trend}>
+                  <BarChart data={performanceData.quarterly_trend} margin={{ top: 5, right: 10, left: 25, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="quarter" />
                     <YAxis />
@@ -1098,7 +1140,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
                 <div>Invoice Count: <span className="font-bold text-slate-800">{reportOutput.summary.total_invoices}</span></div>
                 <div>Avg Invoice Value: <span className="font-bold text-slate-800">₹{reportOutput.summary.avg_invoice.toLocaleString('en-IN')}</span></div>
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <DataTable
                   columns={[
                     { header: "Retailer Shop", accessor: "retailer_name", render: (val) => <span className="font-bold text-slate-700">{val}</span> },
@@ -1120,7 +1162,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
                 <div>Outstanding Balance: <span className="font-bold text-rose-600">₹{reportOutput.annual_summary.pending.toLocaleString('en-IN')}</span></div>
                 <div>Configured Rate: <span className="font-bold text-slate-800">{reportOutput.annual_summary.royalty_pct}%</span></div>
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <DataTable
                   columns={[
                     { header: "Retailer Shop", accessor: "retailer_name", render: (val) => <span className="font-bold text-slate-700">{val}</span> },
@@ -1140,7 +1182,7 @@ export default function PromoterDetail({ promoterId, onNavigate, showToast, user
                 <div>Active Stores: <span className="font-bold text-emerald-600">{reportOutput.active}</span></div>
                 <div>New (This Period): <span className="font-bold text-slate-800">{reportOutput.new_this_period}</span></div>
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <DataTable
                   columns={[
                     { header: "Retailer Name", accessor: "retailer_name", render: (val) => <span className="font-bold text-slate-700">{val}</span> },

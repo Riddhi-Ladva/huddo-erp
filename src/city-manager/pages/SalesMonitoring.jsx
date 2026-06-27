@@ -20,7 +20,21 @@ export default function SalesMonitoring({
   const [sortDir, setSortDir] = useState('desc');
 
   const handleExport = () => {
-    showToast('Exporting sales performance metrics to CSV...', 'success');
+    let filename = `city_manager_sales_performance_${Date.now()}.csv`;
+    let content = "Retailer Name,Category,Orders,Revenue\n" + 
+      retailerSalesData.map(item => `"${item.name}","${item.category}",${item.orders},${item.revenue}`).join("\n");
+
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Successfully downloaded sales performance metrics to CSV.', 'success');
   };
 
   // Sort helper
@@ -185,7 +199,7 @@ export default function SalesMonitoring({
           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Revenue vs Target — 12 Months</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyRevenueData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+              <LineChart data={monthlyRevenueData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={9} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(v) => `₹${v/1000}k`} />

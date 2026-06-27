@@ -49,19 +49,7 @@ export default function PromoterModule({ userRole = 'Founder', showToast, onSwit
   // Otherwise, render Admin/Manager perspective
   switch (adminScreen) {
     case 'list':
-      return (
-        <div className="space-y-4">
-          <div className="flex justify-end -mb-10">
-            <button 
-              onClick={() => handleAdminNavigate('analytics')}
-              className="z-10 flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg transition-colors mr-2 mb-1.5 shadow-xs"
-            >
-              <span>View Analytics</span>
-            </button>
-          </div>
-          <PromoterList onNavigate={handleAdminNavigate} showToast={safeShowToast} />
-        </div>
-      );
+      return <PromoterList onNavigate={handleAdminNavigate} showToast={safeShowToast} />;
     case 'add':
       return <PromoterForm onNavigate={handleAdminNavigate} showToast={safeShowToast} />;
     case 'edit':

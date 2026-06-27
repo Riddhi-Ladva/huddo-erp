@@ -54,29 +54,6 @@ CREATE TABLE IF NOT EXISTS `cm_state_assignments` (
   UNIQUE KEY `uq_cm_state` (`country_manager_id`, `state_id`)
 );
 
--- Create territory aggregated performance snapshots
-CREATE TABLE IF NOT EXISTS `cm_territory_performance` (
-  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  `country_manager_id` BIGINT UNSIGNED NULL DEFAULT NULL,
-  `country_id` BIGINT UNSIGNED NULL DEFAULT NULL,
-  `state_id` BIGINT UNSIGNED NULL DEFAULT NULL,
-  `city_id` BIGINT UNSIGNED NULL DEFAULT NULL,
-  `period_type` ENUM('Daily','Weekly','Monthly','Quarterly','Yearly') NULL DEFAULT NULL,
-  `period_label` VARCHAR(20) NULL DEFAULT NULL,
-  
-  `total_revenue` DECIMAL(14,2) NULL DEFAULT 0.00,
-  `total_orders` INT NULL DEFAULT 0,
-  `delivered_orders` INT NULL DEFAULT 0,
-  `cancelled_orders` INT NULL DEFAULT 0,
-  `total_retailers` INT NULL DEFAULT 0,
-  `active_retailers` INT NULL DEFAULT 0,
-  `new_retailers` INT NULL DEFAULT 0,
-  `avg_order_value` DECIMAL(12,2) NULL DEFAULT 0.00,
-  
-  `computed_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX `idx_cm_period` (`country_manager_id`, `period_type`, `period_label`)
-);
-
 -- Create targets tracking table
 CREATE TABLE IF NOT EXISTS `cm_targets` (
   `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

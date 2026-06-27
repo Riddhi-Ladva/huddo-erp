@@ -72,7 +72,7 @@ export function Modal({ isOpen, onClose, title, children, confirmText, onConfirm
         </div>
 
         {/* Content */}
-        <div className="p-5 text-xs text-slate-600 font-medium leading-relaxed">
+        <div className="p-5 text-xs text-slate-600 font-medium leading-relaxed overflow-y-auto max-h-[70vh]">
           {children}
         </div>
 

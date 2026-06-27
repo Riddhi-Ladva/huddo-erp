@@ -142,6 +142,28 @@ export default function CountryManagerDetail({ cmId, onNavigate, showToast, user
   };
 
   const handleSetTarget = async () => {
+    // Basic client side validation
+    if (!targetForm.target_period || targetForm.target_period.trim() === '') {
+      showToast("Please enter a valid period label.", "error");
+      return;
+    }
+    if (targetForm.revenue_target === undefined || isNaN(targetForm.revenue_target) || Number(targetForm.revenue_target) < 0) {
+      showToast("Revenue target must be a non-negative number.", "error");
+      return;
+    }
+    if (targetForm.order_count_target === undefined || isNaN(targetForm.order_count_target) || Number(targetForm.order_count_target) < 0) {
+      showToast("Order count target must be a non-negative number.", "error");
+      return;
+    }
+    if (targetForm.retailer_target === undefined || isNaN(targetForm.retailer_target) || Number(targetForm.retailer_target) < 0) {
+      showToast("Retailer target must be a non-negative number.", "error");
+      return;
+    }
+    if (targetForm.new_cities_target === undefined || isNaN(targetForm.new_cities_target) || Number(targetForm.new_cities_target) < 0) {
+      showToast("New cities target must be a non-negative number.", "error");
+      return;
+    }
+
     try {
       const res = await fetch(`/api/country-managers/${cmId}/targets`, {
         method: 'POST',
@@ -152,6 +174,9 @@ export default function CountryManagerDetail({ cmId, onNavigate, showToast, user
         showToast("Target configured successfully", "success");
         setNewTargetModal(false);
         loadTabData();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Target creation failed", "error");
       }
     } catch (err) {
       showToast("Target creation failed", "error");
@@ -272,6 +297,30 @@ export default function CountryManagerDetail({ cmId, onNavigate, showToast, user
     }
   };
 
+  const handleExportCMReport = (format) => {
+    let filename = `country_manager_${reports.type}_report_${Date.now()}.${format.toLowerCase()}`;
+    let csvContent = "Filter,Value\n" + 
+      `"Country Scope","India (Country ID: 1)"\n` + 
+      `"Timestamp Generated","${new Date().toLocaleString()}"\n` +
+      `"Report Type","${reports.type.toUpperCase()}"\n`;
+      
+    if (reports.data && Array.isArray(reports.data)) {
+      csvContent += "\nData Details:\n" + JSON.stringify(reports.data);
+    }
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast(`Successfully exported data as ${format.toUpperCase()}.`, "success");
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-sm flex items-center justify-center min-h-[400px]">
@@ -297,124 +346,141 @@ export default function CountryManagerDetail({ cmId, onNavigate, showToast, user
 
   const TABS_LIST = [
     { id: 'Overview', label: 'Overview', icon: Globe },
-    { id: 'Territory', label: 'Territory & States', icon: Layers },
+    { id: 'States', label: 'States Management', icon: Layers },
     { id: 'Approvals', label: 'Approvals Queue', icon: CheckSquare, badge: pendingApprovalsCount },
     { id: 'Targets', label: 'Targets & KPIs', icon: Target },
     { id: 'Commissions', label: 'Commissions', icon: Percent },
     { id: 'State Managers', label: 'State Managers', icon: Users },
-    { id: 'Reports', label: 'Reports Scoping', icon: BarChart3 },
     { id: 'Notifications', label: 'Notifications', icon: Bell, badge: notifications.filter(n => !n.is_read).length }
   ];
 
   return (
     <div className="space-y-6 cm-detail-page">
-      {/* Header Back Button */}
-      <div className="flex items-center gap-4">
-        {userRole !== 'Country Manager' && (
+      {/* Header Back Button & Profile Info (Only on Overview) */}
+      {activeTab === 'Overview' && (
+        <div className="flex items-center gap-4">
+          {userRole !== 'Country Manager' && (
+            <button
+              onClick={() => onNavigate("list")}
+              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-slate-900 font-display">{profile.full_name}</h1>
+              <span className="px-2.5 py-0.5 bg-brand-orange/10 border border-brand-orange/20 rounded-full text-xs font-bold text-brand-orange">
+                {profile.employee_code}
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                profile.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}>
+                {profile.status}
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
+              <Globe className="w-3.5 h-3.5 text-slate-400" />
+              <span>Assigned Country: <b>{profile.assigned_country_name}</b></span>
+            </p>
+          </div>
+
+          {userRole !== 'Country Manager' && (
+            <button
+              onClick={() => onNavigate(`edit-${cmId}`)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:border-slate-350 bg-white text-slate-700 text-sm font-bold rounded-lg shadow-sm transition-colors cursor-pointer"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span>Edit Profile</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Minimal Header on other pages for Admin/Founder role */}
+      {activeTab !== 'Overview' && userRole !== 'Country Manager' && (
+        <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
           <button
             onClick={() => onNavigate("list")}
             className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-        )}
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 font-display">{profile.full_name}</h1>
-            <span className="px-2.5 py-0.5 bg-brand-orange/10 border border-brand-orange/20 rounded-full text-xs font-bold text-brand-orange">
-              {profile.employee_code}
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-              profile.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-            }`}>
-              {profile.status}
-            </span>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 font-display">
+              {profile.full_name} <span className="text-slate-400 font-normal">| {TABS_LIST.find(t => t.id === activeTab)?.label || activeTab}</span>
+            </h1>
           </div>
-          <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-            <Globe className="w-3.5 h-3.5 text-slate-400" />
-            <span>Assigned Country: <b>{profile.assigned_country_name}</b></span>
-          </p>
         </div>
+      )}
 
-        {userRole !== 'Country Manager' && (
-          <button
-            onClick={() => onNavigate(`edit-${cmId}`)}
-            className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 hover:border-slate-350 bg-white text-slate-700 text-sm font-bold rounded-lg shadow-sm transition-colors cursor-pointer"
-          >
-            <Edit2 className="w-4 h-4" />
-            <span>Edit Profile</span>
-          </button>
-        )}
-      </div>
+      {/* Quick Summary Strip (Only on Overview) */}
+      {activeTab === 'Overview' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div className="text-center border-r border-slate-100 last:border-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">States Managed</span>
+            <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">{totalStates} States</span>
+          </div>
+          <div className="text-center border-r border-slate-100 last:border-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Retailers</span>
+            <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">44 Shopfronts</span>
+          </div>
+          <div className="text-center border-r border-slate-100 last:border-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pending Approvals</span>
+            <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">{pendingApprovalsCount} Requests</span>
+          </div>
+          <div className="text-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">This Month Revenue</span>
+            <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">₹1.24 Cr</span>
+          </div>
+        </div>
+      )}
 
-      {/* Quick Summary Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-        <div className="text-center border-r border-slate-100 last:border-0">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">States Managed</span>
-          <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">{totalStates} States</span>
+      {/* Tabs Menu (Only for Founder/Admin/etc role, not for the Country Manager themselves) */}
+      {userRole !== 'Country Manager' && (
+        <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
+          {TABS_LIST.map(t => {
+            const Icon = t.icon;
+            const isActive = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
+                  isActive 
+                    ? 'border-brand-orange text-brand-orange bg-orange-50/10' 
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{t.label}</span>
+                {t.badge > 0 && (
+                  <span className={`px-1.5 py-0.5 text-[9px] font-extrabold rounded-full ${
+                    isActive ? 'bg-brand-orange text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {t.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <div className="text-center border-r border-slate-100 last:border-0">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Retailers</span>
-          <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">44 Shopfronts</span>
-        </div>
-        <div className="text-center border-r border-slate-100 last:border-0">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pending Approvals</span>
-          <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">{pendingApprovalsCount} Requests</span>
-        </div>
-        <div className="text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">This Month Revenue</span>
-          <span className="text-lg font-bold text-slate-800 font-display mt-0.5 block">₹1.24 Cr</span>
-        </div>
-      </div>
-
-      {/* Tabs Menu */}
-      <div className="flex border-b border-slate-200 overflow-x-auto">
-        {TABS_LIST.map(t => {
-          const Icon = t.icon;
-          const isActive = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-                isActive 
-                  ? 'border-brand-orange text-brand-orange bg-orange-50/10' 
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{t.label}</span>
-              {t.badge > 0 && (
-                <span className={`px-1.5 py-0.5 text-[9px] font-extrabold rounded-full ${
-                  isActive ? 'bg-brand-orange text-white' : 'bg-slate-100 text-slate-600'
-                }`}>
-                  {t.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      )}
 
       {/* Tab Contents */}
       <div className="cm-tab-content">
         
         {/* TAB 1: Overview */}
         {activeTab === 'Overview' && (
-          <CountryManagerDashboard cmId={cmId} isTab={true} onNavigate={(tab) => {
-            if (tab === 'Targets') setActiveTab('Targets');
-            if (tab === 'Approvals') setActiveTab('Approvals');
-            if (tab === 'Reports') setActiveTab('Reports');
-            if (tab === 'Notifications') setActiveTab('Notifications');
-          }} showToast={showToast} />
+          <CountryManagerDashboard cmId={cmId} isTab={true} onNavigate={setActiveTab} showToast={showToast} />
         )}
 
-        {/* TAB 2: Territory & States */}
-        {activeTab === 'Territory' && (
+        {/* TAB 2: States Management */}
+        {activeTab === 'States' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white border border-slate-200 rounded-xl p-4.5 shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-slate-800 font-display">Assigned Territory Matrix</h3>
+                <h3 className="text-sm font-bold text-slate-800 font-display">Assigned States Matrix</h3>
                 <p className="text-xs text-slate-400 font-semibold mt-0.5">Map showing state nodes and state managers allocated to this country.</p>
               </div>
               <button
@@ -682,88 +748,6 @@ export default function CountryManagerDetail({ cmId, onNavigate, showToast, user
           </div>
         )}
 
-        {/* TAB 7: Reports */}
-        {activeTab === 'Reports' && (
-          <div className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 font-display">Report Scoping Generator</h3>
-                <p className="text-xs text-slate-400 font-semibold mt-0.5">Select a report module and generate aggregated country performance stats.</p>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5 pb-2">
-                {['sales', 'revenue', 'retailers', 'territory', 'commissions', 'employees'].map(type => (
-                  <button
-                    key={type}
-                    onClick={() => generateReport(type)}
-                    disabled={reports.generating}
-                    className={`px-4 py-2 border rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
-                      reports.type === type 
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm' 
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-350'
-                    }`}
-                  >
-                    {type} Report
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Generated Report Output */}
-            {reports.generating ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-xs flex items-center justify-center min-h-[300px]">
-                <div className="flex items-center gap-2 text-slate-400 text-sm font-bold animate-pulse">
-                  <RefreshCw className="w-4 h-4 animate-spin text-brand-orange" />
-                  <span>Compiling territorial data files...</span>
-                </div>
-              </div>
-            ) : reports.data ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-6 animate-fade-in">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-bold text-slate-800 font-display uppercase tracking-wide">
-                    Generated: {reports.type} Report Output
-                  </h3>
-                  <div className="flex gap-2">
-                    <button onClick={() => showToast("Exporting data as CSV...", "success")} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg cursor-pointer">Export CSV</button>
-                    <button onClick={() => showToast("Exporting data as Excel...", "success")} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg cursor-pointer">Export Excel</button>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-xs font-semibold text-slate-500 leading-relaxed">
-                  <span className="font-bold text-slate-800 block mb-1">Audit Filter Configuration Applied:</span>
-                  - Country Scope: India (Country ID: 1) <br />
-                  - Timestamp Generated: {new Date().toLocaleString()} <br />
-                  - Format output: JSON structure compiled securely.
-                </div>
-
-                {reports.type === 'sales' && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1">Aggregated Revenue</span>
-                      <span className="text-xl font-bold text-slate-800 font-display">₹{reports.data.summary.total_revenue.toLocaleString('en-IN')}</span>
-                    </div>
-                    <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1">Delivered Orders</span>
-                      <span className="text-xl font-bold text-slate-800 font-display">{reports.data.summary.total_orders}</span>
-                    </div>
-                    <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1">Average Ticket</span>
-                      <span className="text-xl font-bold text-slate-800 font-display">₹{reports.data.summary.avg_order_value.toLocaleString('en-IN')}</span>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="text-slate-400 text-xs font-bold text-center py-6">
-                  Check console for the complete structured JSON data payload returned.
-                </div>
-              </div>
-            ) : (
-              <div className="text-center p-8 bg-white border border-slate-200 rounded-xl">
-                <p className="text-slate-500 text-sm font-semibold">Select a report module from the selectors above and click to compile logs.</p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* TAB 8: Notifications */}
         {activeTab === 'Notifications' && (
@@ -862,7 +846,7 @@ export default function CountryManagerDetail({ cmId, onNavigate, showToast, user
       <Modal
         isOpen={newTargetModal}
         onClose={() => setNewTargetModal(false)}
-        title="Configure Territory Target Goal"
+        title="Configure Sales Target Goal"
         onConfirm={handleSetTarget}
       >
         <div className="space-y-4 text-xs font-semibold">

@@ -165,7 +165,7 @@ export default function Customers({ showToast }) {
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Consumer Transaction Billings</h4>
                 {custHistory.length > 0 ? (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto">
                     <table className="w-full text-left text-xs font-semibold text-slate-700">
                       <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                         <tr>

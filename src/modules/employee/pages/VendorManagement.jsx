@@ -144,7 +144,7 @@ export default function VendorManagement({ showToast }) {
                 <div className="space-y-3">
                   <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider border-b border-slate-100 pb-1">Purchase orders history</span>
                   {selectedVendor.history && selectedVendor.history.length > 0 ? (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                    <div className="border border-slate-200 rounded-xl overflow-x-auto text-xs">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">

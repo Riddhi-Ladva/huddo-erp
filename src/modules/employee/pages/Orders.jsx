@@ -274,7 +274,7 @@ export default function Orders({ showToast }) {
             {/* Line items table */}
             <div>
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Order Line Items</h4>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -476,7 +476,7 @@ export default function Orders({ showToast }) {
 
             {/* Added list */}
             {productsList.length > 0 && (
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white mt-3">
+              <div className="border border-slate-200 rounded-lg overflow-x-auto bg-white mt-3">
                 <table className="w-full text-left text-[11px] border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">

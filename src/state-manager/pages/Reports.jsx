@@ -24,7 +24,28 @@ export default function Reports({
   const dateRange = 'June 2026';
 
   const handleExport = () => {
-    showToast(`Generating and exporting ${activeReport.toUpperCase()} report in ${formatFilter} format...`, "success");
+    let format = formatFilter.toLowerCase();
+    let filename = `state_manager_${activeReport}_report_${Date.now()}.${format}`;
+    let content = `--- STATE OPERATION: ${activeReport.toUpperCase()} REPORT ---\nGenerated: ${new Date().toLocaleDateString()}\nFormat: ${formatFilter}\n\n`;
+    
+    if (activeReport === 'sales') {
+      content += "Date,Revenue\n" + salesReportChart.map(item => `"${item.day}",${item.revenue}`).join("\n");
+    } else {
+      content += "Status,Details\nActive,Data compiled for state geographic operations.";
+    }
+
+    const blobType = format === 'pdf' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+    const blob = new Blob([content], { type: blobType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast(`Successfully downloaded ${activeReport.toUpperCase()} report as ${formatFilter}.`, "success");
   };
 
   const REPORT_TYPES = [
@@ -221,7 +242,7 @@ export default function Reports({
           <div className="h-60">
             {activeReport === 'sales' && (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={salesReportChart} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <LineChart data={salesReportChart} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="day" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(val) => `₹${val/1000}K`} />
@@ -233,7 +254,7 @@ export default function Reports({
 
             {activeReport === 'revenue' && (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cityPerformanceData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <BarChart data={cityPerformanceData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="city" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(val) => `₹${val/1000}K`} />
@@ -249,7 +270,7 @@ export default function Reports({
 
             {activeReport === 'retailer' && (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sortedRetailers} layout="vertical" margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
+                <BarChart data={sortedRetailers} layout="vertical" margin={{ top: 5, right: 5, left: 55, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(val) => `₹${val/1000}K`} />
                   <YAxis type="category" dataKey="businessName" stroke="#94a3b8" fontSize={9} tickLine={false} width={80} />
@@ -261,7 +282,7 @@ export default function Reports({
 
             {activeReport === 'city' && (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cityPerformanceData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <BarChart data={cityPerformanceData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="city" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(val) => `₹${val/1000}K`} />
@@ -275,7 +296,7 @@ export default function Reports({
 
             {activeReport === 'employee' && (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={fieldForceData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <BarChart data={fieldForceData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
@@ -289,7 +310,7 @@ export default function Reports({
 
             {activeReport === 'order' && (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={orderReportTable} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <BarChart data={orderReportTable} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="month" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />

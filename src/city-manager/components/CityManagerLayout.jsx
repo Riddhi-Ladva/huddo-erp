@@ -305,7 +305,7 @@ export default function CityManagerLayout({
                   <div className="border-t border-slate-100 my-1"></div>
                   
                   <button 
-                    onClick={() => { setIsProfileOpen(false); onSwitchRole('Founder'); }}
+                    onClick={() => { setIsProfileOpen(false); onSwitchRole('Logout'); }}
                     className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
                   >
                     <LogOut className="w-3.5 h-3.5 text-rose-500" />
@@ -319,7 +319,7 @@ export default function CityManagerLayout({
         </header>
 
         {/* Main canvas */}
-        <main className="p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto">
+        <main className="p-4 sm:p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto min-w-0">
           {children}
         </main>
       </div>

@@ -80,7 +80,7 @@ export default function PurchaseApprovals({ showToast }) {
       </div>
 
       {/* Sub tabs selector */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button
           onClick={() => setActiveTab("pending")}
           className={`px-5 py-3 text-xs font-bold border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${

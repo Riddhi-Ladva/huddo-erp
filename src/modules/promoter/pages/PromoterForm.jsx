@@ -133,7 +133,7 @@ export default function PromoterForm({ promoterId, onNavigate, showToast }) {
       const url = isEdit ? `/api/promoters/${promoterId}` : '/api/promoters/register';
       const method = isEdit ? 'PUT' : 'POST';
       
-      // Seed default/hidden territory details on register (stored in DB but hidden from UI)
+      // Seed default/hidden geographic details on register (stored in DB but hidden from UI)
       const payload = {
         ...formData,
         allocated_country_id: 1,

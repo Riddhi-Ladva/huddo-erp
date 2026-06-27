@@ -1,9 +1,14 @@
-// src/state-manager/StateManagerModule.jsx
 import { useState, useEffect, useRef } from 'react';
+import { 
+  Home, Users, Store, ShoppingCart, CheckSquare, 
+  TrendingUp, Target, MapPin, Percent, BarChart3, Bell
+} from 'lucide-react';
 
 // Import Layout
-import StateManagerLayout from './components/StateManagerLayout';
+import { DashboardLayout } from '../components/DesignSystem';
+import MyProfile from '../modules/MyProfile';
 import { Toast, SkeletonLoader } from './components/Common';
+import { currentStateManager } from './mockData';
 
 // Import Mock Data
 import { 
@@ -22,7 +27,6 @@ import {
 import Dashboard from './pages/Dashboard';
 import CityManagers from './pages/CityManagers';
 import Retailers from './pages/Retailers';
-import TerritoryMap from './pages/TerritoryMap';
 import Orders from './pages/Orders';
 import Approvals from './pages/Approvals';
 import SalesMonitoring from './pages/SalesMonitoring';
@@ -316,8 +320,55 @@ export default function StateManagerModule({ showToast: parentShowToast, onSwitc
   const pendingApprovalsCount = pendingApprovals.length;
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
+  const SIDEBAR_ITEMS = [
+    {
+      section: "OVERVIEW",
+      items: [
+        { id: "Dashboard", label: "Dashboard", icon: Home }
+      ]
+    },
+    {
+      section: "MY REGION",
+      items: [
+        { id: "City Managers", label: "City Managers", icon: Users },
+        { id: "Retailers", label: "Retailers", icon: Store }
+      ]
+    },
+    {
+      section: "OPERATIONS",
+      items: [
+        { id: "Orders", label: "Orders", icon: ShoppingCart },
+        { id: "Approvals", label: "Approvals", icon: CheckSquare, badge: pendingApprovalsCount }
+      ]
+    },
+    {
+      section: "PERFORMANCE",
+      items: [
+        { id: "Sales Monitoring", label: "Sales Monitoring", icon: TrendingUp },
+        { id: "Targets", label: "Targets", icon: Target },
+        { id: "Field Force", label: "Field Force", icon: MapPin }
+      ]
+    },
+    {
+      section: "FINANCIALS",
+      items: [
+        { id: "My Incentive", label: "My Incentive", icon: Percent }
+      ]
+    },
+    {
+      section: "ADMIN",
+      items: [
+        { id: "Reports", label: "Reports", icon: BarChart3 },
+        { id: "Notifications", label: "Notifications", icon: Bell, badge: unreadNotificationsCount }
+      ]
+    }
+  ];
+
   // Render active route components
   const renderActiveTab = () => {
+    if (activeTab === 'Profile') {
+      return <MyProfile showToast={showToast} userRole={userRole} onSwitchRole={onSwitchRole} />;
+    }
     switch (activeTab) {
       case 'Dashboard':
         return (
@@ -328,6 +379,7 @@ export default function StateManagerModule({ showToast: parentShowToast, onSwitc
             monthlyRevenueData={monthlyRevenueData}
             cityPerformanceData={cityPerformanceData}
             fieldForceData={fieldForceData}
+            pendingApprovals={pendingApprovals}
             onApprove={(id) => handleApproveApproval(id)}
             onReject={() => {
               // Trigger reject sequence on approvals tab
@@ -359,15 +411,7 @@ export default function StateManagerModule({ showToast: parentShowToast, onSwitc
             showToast={showToast}
           />
         );
-      case 'Territory Map':
-        return (
-          <TerritoryMap 
-            cityPerformanceData={cityPerformanceData}
-            cityManagers={cityManagers}
-            onNavigate={handleTabChange}
-            onNavigateWithFilter={handleNavigateWithFilter}
-          />
-        );
+
       case 'Orders':
         return (
           <Orders 
@@ -444,19 +488,38 @@ export default function StateManagerModule({ showToast: parentShowToast, onSwitc
           />
         );
       default:
-        return <div className="p-8 text-center text-xs font-semibold text-slate-400">Section coming soon!</div>;
+        return (
+          <Dashboard 
+            cityManagers={cityManagers}
+            monthlyRevenueData={monthlyRevenueData}
+            cityPerformanceData={cityPerformanceData}
+            fieldForceData={fieldForceData}
+            pendingApprovals={pendingApprovals}
+            onApprove={handleApproveApproval}
+            onReject={() => {
+              handleTabChange("Approvals");
+              showToast("Provide rejection reason in workspace card.", "info");
+            }}
+            onNavigate={handleTabChange}
+          />
+        );
     }
   };
 
   return (
-    <StateManagerLayout
+    <DashboardLayout
+      userRole="State Manager"
       activeTab={activeTab}
-      setActiveTab={setActiveTab}
-      pendingApprovalsCount={pendingApprovalsCount}
-      unreadNotificationsCount={unreadNotificationsCount}
+      setActiveTab={handleTabChange}
+      sidebarItems={SIDEBAR_ITEMS}
       onSwitchRole={onSwitchRole}
-      searchQuery={searchQuery}
-      setSearchQuery={setSearchQuery}
+      notifications={notifications.map(n => ({ id: n.id, title: n.title || 'System Alert', message: n.message, read: n.read, date: n.date }))}
+      onMarkAllNotificationsRead={handleMarkAllRead}
+      profile={{
+        name: currentStateManager.name,
+        subtitle: `${currentStateManager.state} State Manager`,
+        image: null
+      }}
     >
       {loading ? (
         <SkeletonLoader type={activeTab === 'Dashboard' ? 'dashboard' : activeTab === 'City Managers' || activeTab === 'Retailers' || activeTab === 'Orders' ? 'table' : 'cards'} />
@@ -472,6 +535,6 @@ export default function StateManagerModule({ showToast: parentShowToast, onSwitc
           onClose={() => setToast(null)} 
         />
       )}
-    </StateManagerLayout>
+    </DashboardLayout>
   );
 }

@@ -196,7 +196,7 @@ export default function CountryManagerForm({ cmId, onNavigate, showToast }) {
             {isEdit ? "Edit Country Manager Profile" : "Register Country Manager"}
           </h1>
           <p className="text-sm text-slate-500">
-            {isEdit ? "Modify professional credentials and territorial configurations." : "Set up a new country director node in the system."}
+            {isEdit ? "Modify professional credentials and regional configurations." : "Set up a new country director node in the system."}
           </p>
         </div>
       </div>

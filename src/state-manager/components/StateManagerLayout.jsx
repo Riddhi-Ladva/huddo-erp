@@ -1,7 +1,7 @@
 // src/state-manager/components/StateManagerLayout.jsx
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Users, Store, Map, ShoppingCart, CheckSquare, 
+  LayoutDashboard, Users, Store, ShoppingCart, CheckSquare, 
   TrendingUp, Target, MapPin, BadgePercent, BarChart2, Bell, 
   ChevronLeft, ChevronRight, Search, LogOut
 } from 'lucide-react';
@@ -41,11 +41,10 @@ export default function StateManagerLayout({
       ]
     },
     {
-      section: "MY TERRITORY",
+      section: "MY REGION",
       items: [
         { id: "City Managers", label: "City Managers", icon: Users },
-        { id: "Retailers", label: "Retailers", icon: Store },
-        { id: "Territory Map", label: "Territory Map", icon: Map }
+        { id: "Retailers", label: "Retailers", icon: Store }
       ]
     },
     {
@@ -324,7 +323,7 @@ export default function StateManagerLayout({
                   <button 
                     onClick={() => {
                       setIsProfileOpen(false);
-                      onSwitchRole('Founder'); // Default Switch Role back
+                      onSwitchRole('Logout'); // Log out and switch to Login
                     }}
                     className="w-full text-left px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
                   >
@@ -339,7 +338,7 @@ export default function StateManagerLayout({
         </header>
 
         {/* Main Panel Content Canvas */}
-        <main className="p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto">
+        <main className="p-4 sm:p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto min-w-0">
           {children}
         </main>
 

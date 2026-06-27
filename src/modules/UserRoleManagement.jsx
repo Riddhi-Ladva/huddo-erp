@@ -5,9 +5,34 @@ import { DataTable, Modal } from '../components/Common';
 
 export default function UserRoleManagement({ showToast }) {
   const [activeTab, setActiveTab] = useState('users'); // users | roles
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState([]);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
   const [customRoles, setCustomRoles] = useState([]);
+
+  React.useEffect(() => {
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(u => ({
+            id: u._id,
+            name: u.name,
+            email: u.email,
+            mobile: u.mobile,
+            role: u.role?.name || u.role || 'Sales Executive',
+            department: u.department || 'Sales',
+            status: u.is_active ? 'Active' : 'Inactive'
+          }));
+          setUsers(mapped);
+        } else {
+          setUsers(initialUsers);
+        }
+      })
+      .catch(err => {
+        console.error("Error loading users:", err);
+        setUsers(initialUsers);
+      });
+  }, []);
 
   // Add User Modal State
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -29,9 +54,23 @@ export default function UserRoleManagement({ showToast }) {
       return;
     }
     const newUser = {
-      id: `U${users.length + 1}`,
+      id: `U-${Date.now()}`,
       ...newUserData
     };
+
+    // Save to backend database
+    fetch('/api/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: newUserData.name,
+        email: newUserData.email,
+        mobile: newUserData.mobile,
+        roleName: newUserData.role,
+        password: 'password123',
+        is_active: newUserData.status === 'Active'
+      })
+    }).catch(err => console.error("Failed to save user to backend:", err));
+
     setUsers([...users, newUser]);
     setIsAddUserOpen(false);
     setNewUserData({ name: '', email: '', mobile: '', role: 'Sales Executive', department: 'Sales', status: 'Active' });
@@ -189,7 +228,7 @@ export default function UserRoleManagement({ showToast }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveTab('users')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'users' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -343,7 +382,7 @@ export default function UserRoleManagement({ showToast }) {
 
             {/* Matrix grid */}
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-xs">
                 <table className="w-full border-collapse text-left">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">

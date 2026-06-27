@@ -1,45 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Percent, Save, Plus, Trash2, CheckCircle, Calculator, Info } from 'lucide-react';
-import { initialProducts, initialPromoters, initialEmployees, GEOGRAPHY } from '../mockData';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 
-// HUDDO-UPDATE: Commissions — Added City, State, Country columns to employee commission ledger and renamed manager terms to employee
 export default function Commissions({ showToast }) {
-  const [products, setProducts] = useState(initialProducts);
-  const [promoters, setPromoters] = useState(initialPromoters);
+  const [products, setProducts] = useState([]);
+  const [promoters, setPromoters] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [orders, setOrders] = useState([]);
+
   const [activeSubTab, setActiveSubTab] = useState('retailer'); // retailer | employee | promoter
   const [employeeRoleTab, setEmployeeRoleTab] = useState('city'); // city | state | country
 
   // Helper to resolve employee distribution details from Geography
   const getEmployeeGeography = (employeeName) => {
-    const cityMatch = GEOGRAPHY.cities.find(c => c.manager && c.manager.toLowerCase() === employeeName.toLowerCase());
+    const cityMatch = cities.find(c => c.manager && c.manager.toLowerCase() === employeeName.toLowerCase());
     if (cityMatch) {
-      const stateMatch = GEOGRAPHY.states.find(s => s.name === cityMatch.state);
+      const stateMatch = states.find(s => s.name === cityMatch.state);
       return { city: cityMatch.name, state: cityMatch.state, country: stateMatch ? stateMatch.country : 'India' };
     }
-    const stateMatch = GEOGRAPHY.states.find(s => s.manager && s.manager.toLowerCase() === employeeName.toLowerCase());
+    const stateMatch = states.find(s => s.manager && s.manager.toLowerCase() === employeeName.toLowerCase());
     if (stateMatch) {
       return { city: 'N/A', state: stateMatch.name, country: stateMatch.country };
     }
-    const countryMatch = GEOGRAPHY.countries.find(c => c.manager && c.manager.toLowerCase() === employeeName.toLowerCase());
+    const countryMatch = countries.find(c => c.manager && c.manager.toLowerCase() === employeeName.toLowerCase());
     if (countryMatch) {
       return { city: 'N/A', state: 'N/A', country: countryMatch.name };
     }
-    const emp = initialEmployees.find(e => e.name.toLowerCase() === employeeName.toLowerCase());
-    if (emp && emp.manager) {
-      return getEmployeeGeography(emp.manager);
-    }
     return { city: 'N/A', state: 'N/A', country: 'India' };
   };
-
-  const commissionEmployees = [
-    { name: "Rajesh Sharma", role: "Country Manager", revenue: 12450000, level: 'country' },
-    { name: "Preeti Verma", role: "State Manager", revenue: 3200000, level: 'state' },
-    { name: "Anil Deshmukh", role: "State Manager", revenue: 4500000, level: 'state' },
-    { name: "Sanjay Joshi", role: "City Manager", revenue: 2800000, level: 'city' },
-    { name: "Rahul Shinde", role: "City Manager", revenue: 1700000, level: 'city' },
-    { name: "Amit Kumar", role: "Sales Executive", revenue: 950000, level: 'city' }
-  ];
 
   const calculateEmployeeIncentive = (level, revenue) => {
     const roleSlabs = slabs[level] || [];
@@ -70,14 +61,131 @@ export default function Commissions({ showToast }) {
   const [previewVal, setPreviewVal] = useState('800000');
   const [calculatedReward, setCalculatedReward] = useState(null);
 
+  const loadData = () => {
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setProducts(resData.data.map(p => ({
+            id: p.sku || p._id,
+            _id: p._id,
+            name: p.name,
+            category: p.category?.name || p.category || 'Sports Shoes',
+            retailerMargin: p.retailerMargin || 25
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading products:", err));
+
+    fetch('/api/promoters')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setPromoters(resData.data.map(p => ({
+            id: p._id,
+            name: p.name,
+            code: p.promoter_code,
+            mobile: p.mobile,
+            cities: p.territory?.map(c => c.name || c) || [],
+            royaltyEarned: p.total_royalty_earned || 0,
+            royaltySettled: p.royalty_settled || 0,
+            royaltyPending: p.royalty_pending || 0
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading promoters:", err));
+
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setEmployees(resData.data);
+        }
+      })
+      .catch(err => console.error("Error loading employees:", err));
+
+    fetch('/api/countries')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setCountries(resData.data.map(c => ({
+            id: c._id,
+            name: c.name,
+            manager: c.manager?.full_name || c.manager?.name || ''
+          })));
+        }
+      })
+      .catch(err => console.error(err));
+
+    fetch('/api/states')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setStates(resData.data.map(s => ({
+            id: s._id,
+            name: s.name,
+            country: s.country?.name || '',
+            manager: s.manager?.full_name || s.manager?.name || ''
+          })));
+        }
+      })
+      .catch(err => console.error(err));
+
+    fetch('/api/cities')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setCities(resData.data.map(c => ({
+            id: c._id,
+            name: c.name,
+            state: c.state?.name || '',
+            manager: c.manager?.full_name || c.manager?.name || ''
+          })));
+        }
+      })
+      .catch(err => console.error(err));
+
+    fetch('/api/orders')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setOrders(resData.data.map(o => ({
+            id: o._id,
+            city: o.retailer?.city?.name || o.retailer?.city || '',
+            amount: o.subtotal || 0,
+            created_by: o.created_by
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading orders:", err));
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   const handleUpdateMargin = (id, newPct) => {
     setProducts(products.map(p => 
       p.id === id ? { ...p, retailerMargin: Number(newPct) } : p
     ));
   };
 
-  const handleSaveMargins = () => {
-    showToast("Wholesale retailer margin structure updated.", "success");
+  const handleSaveMargins = async () => {
+    try {
+      const promises = products.map(prod => 
+        fetch(`/api/products/${prod._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ retailerMargin: prod.retailerMargin })
+        })
+      );
+      await Promise.all(promises);
+      showToast("Wholesale retailer margin structure updated successfully.", "success");
+      loadData();
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to save margins.", "error");
+    }
   };
 
   const handleAddSlab = (role) => {
@@ -119,18 +227,76 @@ export default function Commissions({ showToast }) {
   };
 
   const handleSettleRoyalty = (id) => {
-    setPromoters(promoters.map(p => {
-      if (p.id === id) {
-        showToast(`Settled pending royalty ₹${p.royaltyPending} for ${p.name}.`, "success");
-        return {
-          ...p,
-          royaltySettled: p.royaltySettled + p.royaltyPending,
-          royaltyPending: 0
-        };
-      }
-      return p;
-    }));
+    const targetPromoter = promoters.find(p => p.id === id);
+    if (!targetPromoter) return;
+
+    fetch(`/api/promoters/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        royalty_pending: 0,
+        royalty_settled: (targetPromoter.royaltySettled || 0) + (targetPromoter.royaltyPending || 0)
+      })
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Settled pending royalty for ${targetPromoter.name}.`, "success");
+          loadData();
+        } else {
+          showToast("Failed to settle promoter royalty.", "error");
+        }
+      })
+      .catch(err => console.error("Error settling royalty:", err));
   };
+
+  // Map employee list to resolved commission entities
+  const commissionEmployees = employees.map(emp => {
+    const roleName = emp.designation?.title || emp.designation || '';
+    let level = 'city';
+    if (roleName.toLowerCase().includes('country')) level = 'country';
+    else if (roleName.toLowerCase().includes('state')) level = 'state';
+
+    // Compute dynamic revenue based on orders mapped to this employee's scope
+    let revenue = 0;
+    if (level === 'country') {
+      const countryObj = countries.find(c => c.manager === emp.full_name || c.manager === emp.name);
+      if (countryObj) {
+        const countryStates = states.filter(s => s.country === countryObj.name);
+        const countryCities = cities.filter(c => countryStates.some(s => s.name === c.state));
+        revenue = orders
+          .filter(o => countryCities.some(c => c.name === o.city))
+          .reduce((sum, o) => sum + o.amount, 0);
+      }
+    } else if (level === 'state') {
+      const stateObj = states.find(s => s.manager === emp.full_name || s.manager === emp.name);
+      if (stateObj) {
+        const stateCities = cities.filter(c => c.state === stateObj.name);
+        revenue = orders
+          .filter(o => stateCities.some(c => c.name === o.city))
+          .reduce((sum, o) => sum + o.amount, 0);
+      }
+    } else {
+      const cityObj = cities.find(c => c.manager === emp.full_name || c.manager === emp.name);
+      if (cityObj) {
+        revenue = orders
+          .filter(o => o.city === cityObj.name)
+          .reduce((sum, o) => sum + o.amount, 0);
+      } else {
+        // Sales Executive or general employee
+        revenue = orders
+          .filter(o => o.created_by === emp.user?._id || o.created_by?._id === emp.user?._id)
+          .reduce((sum, o) => sum + o.amount, 0);
+      }
+    }
+
+    return {
+      name: emp.full_name || emp.name,
+      role: roleName || 'Sales Executive',
+      revenue: revenue || 0,
+      level
+    };
+  });
 
   // Commission bar chart data
   const commissionPaidData = [
@@ -152,7 +318,7 @@ export default function Commissions({ showToast }) {
       </div>
 
       {/* Main Sections Navigation */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveSubTab('retailer')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeSubTab === 'retailer' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -190,7 +356,7 @@ export default function Commissions({ showToast }) {
             </button>
           </div>
 
-          <div className="border border-slate-100 rounded-lg overflow-hidden">
+          <div className="border border-slate-100 rounded-lg overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -200,21 +366,27 @@ export default function Commissions({ showToast }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {products.map(prod => (
-                  <tr key={prod.id}>
-                    <td className="px-4 py-3 text-slate-900">{prod.name}</td>
-                    <td className="px-4 py-3 text-slate-500">{prod.category}</td>
-                    <td className="px-4 py-3 text-right">
-                      <input 
-                        type="number"
-                        value={prod.retailerMargin}
-                        onChange={(e) => handleUpdateMargin(prod.id, e.target.value)}
-                        className="border border-slate-200 text-slate-800 rounded p-1 w-20 text-right font-bold focus:outline-none focus:ring-1 focus:ring-brand-orange bg-white"
-                      />
-                      <span className="ml-1 text-slate-400">%</span>
-                    </td>
+                {products.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" className="px-4 py-3 text-center text-slate-400">No products found in database.</td>
                   </tr>
-                ))}
+                ) : (
+                  products.map(prod => (
+                    <tr key={prod.id}>
+                      <td className="px-4 py-3 text-slate-900">{prod.name}</td>
+                      <td className="px-4 py-3 text-slate-500">{prod.category}</td>
+                      <td className="px-4 py-3 text-right">
+                        <input 
+                          type="number"
+                          value={prod.retailerMargin}
+                          onChange={(e) => handleUpdateMargin(prod.id, e.target.value)}
+                          className="border border-slate-200 text-slate-800 rounded p-1 w-20 text-right font-bold focus:outline-none focus:ring-1 focus:ring-brand-orange bg-white"
+                        />
+                        <span className="ml-1 text-slate-400">%</span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -372,7 +544,7 @@ export default function Commissions({ showToast }) {
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs lg:col-span-3 space-y-4">
             <h3 className="text-sm font-bold text-slate-900 font-display">Employee Commissions Ledger</h3>
             <p className="text-xs text-slate-400 font-semibold font-sans">Ledger showing regional employee distribution mappings from active geography node parameters.</p>
-            <div className="border border-slate-100 rounded-lg overflow-hidden">
+            <div className="border border-slate-100 rounded-lg overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -381,26 +553,32 @@ export default function Commissions({ showToast }) {
                     <th className="px-4 py-3">City</th>
                     <th className="px-4 py-3">State</th>
                     <th className="px-4 py-3">Country</th>
-                    <th className="px-4 py-3 text-right">Simulated Revenue</th>
+                    <th className="px-4 py-3 text-right">Revenue Managed</th>
                     <th className="px-4 py-3 text-right">Calculated Incentive</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                  {commissionEmployees.map((emp, idx) => {
-                    const geo = getEmployeeGeography(emp.name);
-                    const incentive = calculateEmployeeIncentive(emp.level, emp.revenue);
-                    return (
-                      <tr key={idx}>
-                        <td className="px-4 py-3 text-slate-900 font-bold">{emp.name}</td>
-                        <td className="px-4 py-3 text-slate-500">{emp.role}</td>
-                        <td className="px-4 py-3 text-slate-600">{geo.city}</td>
-                        <td className="px-4 py-3 text-slate-600">{geo.state}</td>
-                        <td className="px-4 py-3 text-slate-600">{geo.country}</td>
-                        <td className="px-4 py-3 text-right text-slate-800">₹{emp.revenue.toLocaleString('en-IN')}</td>
-                        <td className="px-4 py-3 text-right text-emerald-600 font-bold">₹{incentive.toLocaleString('en-IN')}</td>
-                      </tr>
-                    );
-                  })}
+                  {commissionEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-4 py-3 text-center text-slate-400">No managers found in database.</td>
+                    </tr>
+                  ) : (
+                    commissionEmployees.map((emp, idx) => {
+                      const geo = getEmployeeGeography(emp.name);
+                      const incentive = calculateEmployeeIncentive(emp.level, emp.revenue);
+                      return (
+                        <tr key={idx}>
+                          <td className="px-4 py-3 text-slate-900 font-bold">{emp.name}</td>
+                          <td className="px-4 py-3 text-slate-500">{emp.role}</td>
+                          <td className="px-4 py-3 text-slate-600">{geo.city}</td>
+                          <td className="px-4 py-3 text-slate-600">{geo.state}</td>
+                          <td className="px-4 py-3 text-slate-600">{geo.country}</td>
+                          <td className="px-4 py-3 text-right text-slate-800">₹{emp.revenue.toLocaleString('en-IN')}</td>
+                          <td className="px-4 py-3 text-right text-emerald-600 font-bold">₹{incentive.toLocaleString('en-IN')}</td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -416,7 +594,7 @@ export default function Commissions({ showToast }) {
             <p className="text-xs text-slate-400 font-semibold">Audit accrued royalty records and flag balances as settled when payments are dispatched via bank ledger.</p>
           </div>
 
-          <div className="border border-slate-100 rounded-lg overflow-hidden">
+          <div className="border border-slate-100 rounded-lg overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -429,25 +607,31 @@ export default function Commissions({ showToast }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                {promoters.map(pr => (
-                  <tr key={pr.id}>
-                    <td className="px-4 py-3 text-slate-950 font-bold">{pr.name}</td>
-                    <td className="px-4 py-3"><code className="bg-slate-100 px-1 py-0.5 rounded text-[10px] font-mono text-slate-600 font-bold">{pr.code}</code></td>
-                    <td className="px-4 py-3 text-right text-slate-800">₹{pr.royaltyEarned.toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3 text-right text-slate-500">₹{pr.royaltySettled.toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3 text-right text-rose-600 font-bold">₹{pr.royaltyPending.toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3 text-right">
-                      {pr.royaltyPending > 0 ? (
-                        <button 
-                          onClick={() => handleSettleRoyalty(pr.id)}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px]"
-                        >
-                          Mark as Settled
-                        </button>
-                      ) : <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-end gap-1"><CheckCircle className="w-3.5 h-3.5" /> Cleared</span>}
-                    </td>
+                {promoters.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-3 text-center text-slate-400">No promoters found in database.</td>
                   </tr>
-                ))}
+                ) : (
+                  promoters.map(pr => (
+                    <tr key={pr.id}>
+                      <td className="px-4 py-3 text-slate-950 font-bold">{pr.name}</td>
+                      <td className="px-4 py-3"><code className="bg-slate-100 px-1 py-0.5 rounded text-[10px] font-mono text-slate-600 font-bold">{pr.code}</code></td>
+                      <td className="px-4 py-3 text-right text-slate-800">₹{pr.royaltyEarned.toLocaleString('en-IN')}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">₹{pr.royaltySettled.toLocaleString('en-IN')}</td>
+                      <td className="px-4 py-3 text-right text-rose-600 font-bold">₹{pr.royaltyPending.toLocaleString('en-IN')}</td>
+                      <td className="px-4 py-3 text-right">
+                        {pr.royaltyPending > 0 ? (
+                          <button 
+                            onClick={() => handleSettleRoyalty(pr.id)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px]"
+                          >
+                            Mark as Settled
+                          </button>
+                        ) : <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-end gap-1"><CheckCircle className="w-3.5 h-3.5" /> Cleared</span>}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -459,7 +643,7 @@ export default function Commissions({ showToast }) {
         <h3 className="text-sm font-bold text-slate-900 mb-4 font-display">Commission Payout Ratios (This Month)</h3>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={commissionPaidData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+            <BarChart data={commissionPaidData} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="role" fontSize={11} stroke="#94a3b8" />
               <YAxis fontSize={11} stroke="#94a3b8" tickFormatter={(val) => `₹${val / 1000}K`} />

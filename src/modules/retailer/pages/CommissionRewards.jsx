@@ -98,7 +98,7 @@ export default function CommissionRewards() {
       {activeSubTab === 'Commission' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-slate-800 font-display">Commission Breakdown Log</h3>
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="border border-slate-200 rounded-lg overflow-x-auto">
             <table className="w-full text-left text-xs font-semibold text-slate-700 border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>
@@ -143,7 +143,7 @@ export default function CommissionRewards() {
       {activeSubTab === 'Rewards' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-slate-800 font-display">Points Transaction History</h3>
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="border border-slate-200 rounded-lg overflow-x-auto">
             <table className="w-full text-left text-xs font-semibold text-slate-700 border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>

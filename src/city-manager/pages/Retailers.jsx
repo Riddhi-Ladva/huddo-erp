@@ -498,7 +498,7 @@ export default function Retailers({
               {/* Orders History */}
               <div className="space-y-2">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block border-b border-slate-50 pb-1">Order History (Last 5)</span>
-                <div className="border border-slate-100 rounded-xl overflow-hidden text-[11px] font-semibold">
+                <div className="border border-slate-100 rounded-xl overflow-x-auto text-[11px] font-semibold">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-[9px] text-slate-400 font-bold uppercase">

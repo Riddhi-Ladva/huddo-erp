@@ -8,9 +8,9 @@ import { Router } from 'express';
 
 const router = Router();
 
-// Helper to strip allocated territory fields
-function stripTerritory(promoter) {
-  // PROMO-MODULE: Strip territory fields from response
+// Helper to strip allocated geographic fields
+function stripGeographicFields(promoter) {
+  // PROMO-MODULE: Strip geographic fields from response
   if (!promoter) return promoter;
   const copy = { ...promoter };
   delete copy.allocated_country_id;
@@ -44,7 +44,7 @@ router.post('/register', async (req, res) => {
 
 // GET /api/promoters
 router.get('/', async (req, res) => {
-  // PROMO-MODULE: Paginated promoter roster with territory fields stripped
+  // PROMO-MODULE: Paginated promoter roster with geographic fields stripped
   try {
     res.json({
       promoters: [],
@@ -57,9 +57,9 @@ router.get('/', async (req, res) => {
 
 // GET /api/promoters/:id
 router.get('/:id', async (req, res) => {
-  // PROMO-MODULE: Fetch detail of promoter with territory fields stripped
+  // PROMO-MODULE: Fetch detail of promoter with geographic fields stripped
   try {
-    res.json(stripTerritory({
+    res.json(stripGeographicFields({
       id: req.params.id,
       full_name: "Mock Promoter"
     }));
@@ -74,7 +74,7 @@ router.put('/:id', async (req, res) => {
   try {
     res.json({
       updated: true,
-      promoter: stripTerritory({ id: req.params.id, full_name: req.body.full_name })
+      promoter: stripGeographicFields({ id: req.params.id, full_name: req.body.full_name })
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

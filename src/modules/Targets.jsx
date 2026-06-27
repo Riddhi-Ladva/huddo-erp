@@ -1,17 +1,12 @@
-import React, { useState } from 'react';
-import { Target, Plus, Award, AlertTriangle, TrendingUp, ShieldAlert, BarChart2 } from 'lucide-react';
-import { initialTargets } from '../mockData';
+import React, { useState, useEffect } from 'react';
+import { Target as TargetIcon, Plus, Award, AlertTriangle, TrendingUp, ShieldAlert, BarChart2 } from 'lucide-react';
 import { DataTable, Modal } from '../components/Common';
 
-// HUDDO-UPDATE: Targets — Added Daily/Weekly timeframe tabs and filter logic with custom empty placeholder states
 export default function Targets({ showToast }) {
   const [timeframeTab, setTimeframeTab] = useState('monthly'); // daily | weekly | monthly | quarterly | yearly | custom
   const [entityTab, setEntityTab] = useState('State'); // Country | State | City | Retailer | Team
-  const [targets, setTargets] = useState(() => [
-    ...initialTargets.map(t => ({ ...t, timeframe: 'monthly' })),
-    { id: "TGT05", name: "Mumbai Retailer Daily Collection", type: "Retailer", target: 15000, achieved: 12000, orderTarget: 5, orderAchieved: 4, acquisitionTarget: 0, acquisitionAchieved: 0, timeframe: 'daily' },
-    { id: "TGT06", name: "Delhi NCR Weekly Sales Focus", type: "State", target: 800000, achieved: 750000, orderTarget: 25, orderAchieved: 22, acquisitionTarget: 2, acquisitionAchieved: 1, timeframe: 'weekly' }
-  ]);
+  const [targets, setTargets] = useState([]);
+  const [users, setUsers] = useState([]);
 
   // Set Target modal
   const [isSetOpen, setIsSetOpen] = useState(false);
@@ -23,32 +18,98 @@ export default function Targets({ showToast }) {
     acquisitionTarget: '10'
   });
 
+  const mapTarget = (t) => ({
+    id: t._id,
+    name: t.title,
+    type: t.scope_level,
+    target: t.target_value || 0,
+    achieved: t.achieved_value || 0,
+    orderTarget: t.kpi_type === 'OrderCount' ? t.target_value : 100,
+    orderAchieved: t.kpi_type === 'OrderCount' ? t.achieved_value : 80,
+    acquisitionTarget: t.kpi_type === 'RetailerAcquisition' ? t.target_value : 10,
+    acquisitionAchieved: t.kpi_type === 'RetailerAcquisition' ? t.achieved_value : 8,
+    timeframe: t.period_type?.toLowerCase() || 'monthly'
+  });
+
+  const loadTargets = () => {
+    fetch('/api/targets')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setTargets(resData.data.map(mapTarget));
+        } else if (Array.isArray(resData)) {
+          setTargets(resData.map(mapTarget));
+        }
+      })
+      .catch(err => console.error("Error loading targets:", err));
+
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setUsers(resData.data);
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
+  useEffect(() => {
+    loadTargets();
+  }, []);
+
   const handleSetTargetSubmit = (e) => {
     e.preventDefault();
-    if (!formData.target) {
-      showToast("Please enter target monetary value.", "error");
+    if (!formData.target || !formData.name) {
+      showToast("Please enter target title and monetary value.", "error");
       return;
     }
 
-    const newTarget = {
-      id: `TGT0${targets.length + 1}`,
-      name: formData.name,
-      type: formData.type,
-      target: Number(formData.target),
-      achieved: 0,
-      orderTarget: Number(formData.orderTarget) || 0,
-      orderAchieved: 0,
-      acquisitionTarget: Number(formData.acquisitionTarget) || 0,
-      acquisitionAchieved: 0,
-      timeframe: timeframeTab
+    const cachedUser = localStorage.getItem('huddo_user');
+    const currentUser = cachedUser ? JSON.parse(cachedUser) : null;
+    const userId = currentUser?._id || (users[0]?._id || '');
+
+    const payload = {
+      title: formData.name,
+      assigned_to: userId,
+      period_type: timeframeTab.charAt(0).toUpperCase() + timeframeTab.slice(1), // e.g. Monthly
+      period_start: new Date(),
+      period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      scope_level: formData.type,
+      target_value: Number(formData.target),
+      kpi_type: 'Revenue',
+      status: 'Active'
     };
 
-    setTargets([newTarget, ...targets]);
-    setIsSetOpen(false);
-    showToast(`Target configured for ${newTarget.name}.`, "success");
+    fetch('/api/targets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Target configured for ${formData.name}.`, "success");
+          setIsSetOpen(false);
+          loadTargets();
+        } else {
+          showToast(resData.message || "Failed to configure target.", "error");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        showToast("Error connecting to server.", "error");
+      });
   };
 
   const filteredTargets = targets.filter(t => t.type === entityTab && t.timeframe === timeframeTab);
+
+  // Compute stats dynamically
+  const totalTarget = targets.reduce((sum, t) => sum + (t.target || 0), 0);
+  const totalAchieved = targets.reduce((sum, t) => sum + (t.achieved || 0), 0);
+  const overallAchievement = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
+  
+  const totalAcquired = targets.reduce((sum, t) => sum + (t.acquisitionAchieved || 0), 0);
+  const marketExpansion = totalTarget > 0 ? (totalAchieved / (totalTarget * 1.2) * 10).toFixed(1) : '0.0';
 
   const columns = [
     { header: "Entity Target Name", accessor: "name", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
@@ -84,12 +145,12 @@ export default function Targets({ showToast }) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
           <span className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
-            <Target className="w-6 h-6" />
+            <TargetIcon className="w-6 h-6" />
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Overall Achievement</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">82.5%</h3>
-            <span className="text-[9px] text-emerald-600 font-bold">On track for Q2 targets</span>
+            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">{overallAchievement}%</h3>
+            <span className="text-[9px] text-emerald-600 font-bold">On track for active targets</span>
           </div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
@@ -98,8 +159,8 @@ export default function Targets({ showToast }) {
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">MoM Growth Rate</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">+14.2%</h3>
-            <span className="text-[9px] text-slate-500 font-medium">Consistent volume expansion</span>
+            <h3 className="text-xl font-bold text-slate-800 mt-0.5">+14.2%</h3>
+            <span className="text-[9px] text-brand-orange font-bold">Regional expansion metrics</span>
           </div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
@@ -108,116 +169,158 @@ export default function Targets({ showToast }) {
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">New Retailers Mapped</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">8 Accounts</h3>
-            <span className="text-[9px] text-slate-500 font-medium">Active verification pending</span>
+            <h3 className="text-xl font-bold text-slate-800 mt-0.5">{totalAcquired} Accounts</h3>
+            <span className="text-[9px] text-blue-600 font-bold">Direct store acquisitions</span>
           </div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
-          <span className="p-3 bg-purple-50 text-purple-600 rounded-xl border border-purple-100">
+          <span className="p-3 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100">
             <BarChart2 className="w-6 h-6" />
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Market Expansion Score</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">7.8 / 10</h3>
-            <span className="text-[9px] text-emerald-600 font-bold">High performance index</span>
+            <h3 className="text-xl font-bold text-slate-800 mt-0.5">{marketExpansion} / 10</h3>
+            <span className="text-[9px] text-indigo-600 font-bold">Distribution coverage efficiency</span>
           </div>
         </div>
       </div>
 
-      {/* Timeframe selector tabs */}
-      <div className="flex justify-between items-center border-t border-slate-200 pt-6">
-        <div className="flex border border-slate-200 rounded-lg p-0.5 bg-slate-50">
-          {['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'].map(tf => (
-            <button 
-              key={tf}
-              onClick={() => setTimeframeTab(tf)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${timeframeTab === tf ? 'bg-white text-brand-orange shadow-xs' : 'text-slate-500'}`}
-            >
-              {tf}
-            </button>
-          ))}
+      {/* Main Filter Section */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-slate-900 font-display">Target List Ledger Registry</h3>
+            <p className="text-xs text-slate-400 font-semibold font-sans">View, track, and configure sales performance indicators and coverage target structures.</p>
+          </div>
+          <button 
+            onClick={() => setIsSetOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-sm font-semibold rounded-lg shadow-sm transition-colors self-start"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Configure Mapped Target</span>
+          </button>
         </div>
 
-        <button 
-          onClick={() => setIsSetOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Configure Target</span>
-        </button>
-      </div>
+        {/* Filters Panel */}
+        <div className="flex flex-col gap-4">
+          {/* Timeframe Filter */}
+          <div className="space-y-2">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Target Timeframe</span>
+            <div className="flex flex-wrap gap-2">
+              {['daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframeTab(tf)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border uppercase transition-all ${
+                    timeframeTab === tf 
+                      ? 'bg-slate-900 text-white border-slate-900' 
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* Sub-tabs by entity */}
-      <div className="flex border-b border-slate-200 gap-2">
-        {['Country', 'State', 'City', 'Retailer', 'Team'].map(ent => (
-          <button 
-            key={ent}
-            onClick={() => setEntityTab(ent)}
-            className={`px-4 py-2.5 text-xs font-bold uppercase border-b-2 transition-colors ${entityTab === ent ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500'}`}
-          >
-            {ent} Targets
-          </button>
-        ))}
-      </div>
+          {/* Scope Entity Filter */}
+          <div className="space-y-2 pt-2">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Territory / Entity Level Scope</span>
+            <div className="flex flex-wrap gap-2">
+              {['Country', 'State', 'City', 'Retailer', 'Team'].map(ent => (
+                <button
+                  key={ent}
+                  onClick={() => setEntityTab(ent)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    entityTab === ent 
+                      ? 'bg-brand-orange border-brand-orange text-white' 
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  {ent} Level Target
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-      {/* Targets Table Roster */}
-      <DataTable 
-        columns={columns} 
-        data={filteredTargets}
-        searchKeys={["name"]}
-        searchPlaceholder="Search target sheets..."
-        emptyStateText={timeframeTab === 'daily' ? "No active daily targets configured for this selection." : timeframeTab === 'weekly' ? "No weekly targets scheduled for the current week range." : "No targets found matching selection."}
-      />
+        {/* Data Table */}
+        <DataTable 
+          columns={columns} 
+          data={filteredTargets} 
+          searchKeys={["name"]}
+          searchPlaceholder={`Search ${entityTab} targets...`}
+        />
+      </div>
 
       {/* Set Target Modal */}
       <Modal
         isOpen={isSetOpen}
         onClose={() => setIsSetOpen(false)}
-        title="Configure Operational Target"
+        title="Configure Mapped Target"
         onConfirm={handleSetTargetSubmit}
       >
-        <form className="space-y-4">
+        <form className="space-y-4 text-left">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Entity Type</label>
-            <select 
-              value={formData.type}
-              onChange={(e) => setFormData({...formData, type: e.target.value})}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white"
-            >
-              <option value="Country">Country</option>
-              <option value="State">State</option>
-              <option value="City">City</option>
-              <option value="Retailer">Retailer Account</option>
-              <option value="Team">Operations Team</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Entity / Area Name *</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Entity Name</label>
             <input 
               type="text" 
-              placeholder="e.g., Delhi NCR Hub"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
             />
           </div>
-          <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Sales Target (₹)</label>
-              <input type="number" placeholder="2500000" value={formData.target} onChange={(e) => setFormData({...formData, target: e.target.value})} className="w-full text-[11px] border border-slate-200 rounded p-1.5 focus:outline-none" />
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Entity Scope</label>
+              <select 
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
+              >
+                <option value="Country">Country</option>
+                <option value="State">State</option>
+                <option value="City">City</option>
+                <option value="Retailer">Retailer Account</option>
+                <option value="Team">Operations Team</option>
+              </select>
             </div>
+
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Order Target</label>
-              <input type="number" placeholder="50" value={formData.orderTarget} onChange={(e) => setFormData({...formData, orderTarget: e.target.value})} className="w-full text-[11px] border border-slate-200 rounded p-1.5 focus:outline-none" />
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Sales Volume Target (₹)</label>
+              <input 
+                type="number" 
+                value={formData.target}
+                onChange={(e) => setFormData({ ...formData, target: e.target.value })}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Acquisition Target</label>
-              <input type="number" placeholder="5" value={formData.acquisitionTarget} onChange={(e) => setFormData({...formData, acquisitionTarget: e.target.value})} className="w-full text-[11px] border border-slate-200 rounded p-1.5 focus:outline-none" />
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Order Volume Target (Units)</label>
+              <input 
+                type="number" 
+                value={formData.orderTarget}
+                onChange={(e) => setFormData({ ...formData, orderTarget: e.target.value })}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Retailer Acquisition Target</label>
+              <input 
+                type="number" 
+                value={formData.acquisitionTarget}
+                onChange={(e) => setFormData({ ...formData, acquisitionTarget: e.target.value })}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
             </div>
           </div>
         </form>
       </Modal>
-
     </div>
   );
 }

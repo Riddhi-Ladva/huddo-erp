@@ -174,7 +174,7 @@ export default function PurchaseOrders({ showToast }) {
                 {/* Line Items Table */}
                 <div className="space-y-2">
                   <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">PO Line items list</span>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto">
                     <table className="w-full text-left text-[11px] border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -322,7 +322,7 @@ export default function PurchaseOrders({ showToast }) {
 
             {/* Line items list */}
             {lineItems.length > 0 && (
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white mt-3 text-[11px]">
+              <div className="border border-slate-200 rounded-lg overflow-x-auto bg-white mt-3 text-[11px]">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">

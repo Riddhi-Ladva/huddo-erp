@@ -24,7 +24,7 @@ export const GEOGRAPHY = {
 
 // Standard system roles & permission matrix mapping
 export const MODULES_LIST = [
-  "Dashboard", "Orders", "Retailers", "Products", "Employees", "Teams", "Departments", "Promoters", "Billing", "Commissions", "Territories", "Sales", "Targets", "Approvals", "Field Tracking", "Notifications", "Reports", "Security", "Inventory"
+  "Dashboard", "Orders", "Retailers", "Products", "Employees", "Teams", "Departments", "Promoters", "Billing", "Commissions", "Sales", "Targets", "Approvals", "Field Tracking", "Notifications", "Reports", "Security", "Inventory"
 ];
 
 export const PERMISSIONS_LIST = [
@@ -42,9 +42,16 @@ export const STANDARD_ROLES = [
 export const initialRolePermissions = STANDARD_ROLES.reduce((acc, role) => {
   acc[role] = MODULES_LIST.reduce((modAcc, mod) => {
     modAcc[mod] = PERMISSIONS_LIST.reduce((permAcc, perm) => {
-      // Founder, CEO, Admin have full access
-      if (["Founder", "CEO", "Admin"].includes(role)) {
+      // Founder & Admin have full access. CEO has full access except for financial modules.
+      if (["Founder", "Admin"].includes(role)) {
         permAcc[perm] = true;
+      } else if (role === "CEO") {
+        const financialModules = ["Billing", "Commissions", "Sales", "Targets"];
+        if (financialModules.includes(mod)) {
+          permAcc[perm] = false;
+        } else {
+          permAcc[perm] = true;
+        }
       } else if (role.includes("Manager")) {
         // Managers can view, edit, approve, reject, assign, export
         permAcc[perm] = ["View", "Edit", "Approve", "Reject", "Assign", "Export"].includes(perm);
@@ -136,9 +143,9 @@ export const initialTeams = [
 
 // Promoters Management
 export const initialPromoters = [
-  { id: "PR01", name: "Suresh Raina", code: "HUDDOPR01", mobile: "9820129034", territory: ["Mumbai", "Pune"], retailersAdded: 8, revenue: 1540000, royaltyEarned: 77000, royaltyPending: 15400, royaltySettled: 61600, status: "Active" },
-  { id: "PR02", name: "Harbhajan Singh", code: "HUDDOPR02", mobile: "9910456723", territory: ["New Delhi"], retailersAdded: 5, revenue: 1280000, royaltyEarned: 64000, royaltyPending: 24000, royaltySettled: 40000, status: "Active" },
-  { id: "PR03", name: "Gautam Gambhir", code: "HUDDOPR03", mobile: "9560901234", territory: ["Ahmedabad"], retailersAdded: 6, revenue: 890000, royaltyEarned: 44500, royaltyPending: 4500, royaltySettled: 40000, status: "Inactive" }
+  { id: "PR01", name: "Suresh Raina", code: "HUDDOPR01", mobile: "9820129034", cities: ["Mumbai", "Pune"], retailersAdded: 8, revenue: 1540000, royaltyEarned: 77000, royaltyPending: 15400, royaltySettled: 61600, status: "Active" },
+  { id: "PR02", name: "Harbhajan Singh", code: "HUDDOPR02", mobile: "9910456723", cities: ["New Delhi"], retailersAdded: 5, revenue: 1280000, royaltyEarned: 64000, royaltyPending: 24000, royaltySettled: 40000, status: "Active" },
+  { id: "PR03", name: "Gautam Gambhir", code: "HUDDOPR03", mobile: "9560901234", cities: ["Ahmedabad"], retailersAdded: 6, revenue: 890000, royaltyEarned: 44500, royaltyPending: 4500, royaltySettled: 40000, status: "Inactive" }
 ];
 
 // Product wise Promoter Royalty configuration %
@@ -197,13 +204,7 @@ export const initialOutstandings = [
   { id: "OUT002", shopName: "Apex Sole Distributors", city: "Pune", pendingAmount: 177000, overdueDays: 15, lastReminder: "2026-06-05" },
 ];
 
-// Territory performance list
-export const initialTerritoriesList = [
-  { id: "TFY01", name: "Maharashtra (West)", type: "State", manager: "Anil Deshmukh", retailersCount: 15, revenue: 4500000 },
-  { id: "TFY02", name: "Delhi NCR", type: "State", manager: "Preeti Verma", retailersCount: 10, revenue: 3200000 },
-  { id: "TFY03", name: "Karnataka (South)", type: "State", manager: "Kiran Kumar", retailersCount: 9, revenue: 2100000 },
-  { id: "TFY04", name: "Gujarat (Central)", type: "State", manager: "Vijay Patel", retailersCount: 8, revenue: 1650000 }
-];
+
 
 // Sales Executive ranking
 export const salesRepRanking = [

@@ -58,28 +58,4 @@ export async function computeRetailerCount(countryId, status, fromDate, toDate) 
   return 0;
 }
 
-/**
- * Saves performance snapshot to territory performance table.
- * INSERT INTO cm_territory_performance (country_manager_id, ...) VALUES (...)
- */
-export async function savePerformanceSnapshot(countryManagerId, data) {
-  // CM-MODULE: Save aggregation snapshot to database
-  console.log(`[Service] Saving performance snapshot for Country Manager: ${countryManagerId}`);
-  // return await db('cm_territory_performance').insert({
-  //   country_manager_id: countryManagerId,
-  //   country_id: data.country_id,
-  //   state_id: data.state_id || null,
-  //   city_id: data.city_id || null,
-  //   period_type: data.period_type,
-  //   period_label: data.period_label,
-  //   total_revenue: data.total_revenue,
-  //   total_orders: data.total_orders,
-  //   delivered_orders: data.delivered_orders,
-  //   cancelled_orders: data.cancelled_orders,
-  //   total_retailers: data.total_retailers,
-  //   active_retailers: data.active_retailers,
-  //   new_retailers: data.new_retailers,
-  //   avg_order_value: data.avg_order_value
-  // });
-  return { success: true };
-}
+

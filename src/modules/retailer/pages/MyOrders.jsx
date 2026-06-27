@@ -228,7 +228,7 @@ export default function MyOrders({ showToast }) {
             {/* Items table */}
             <div className="space-y-2">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Purchased Footwear Items</h4>
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="border border-slate-200 rounded-lg overflow-x-auto">
                 <table className="w-full text-left text-xs font-semibold text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                     <tr>

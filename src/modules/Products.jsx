@@ -4,8 +4,59 @@ import { initialProducts } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 
 export default function Products({ showToast }) {
-  const [products, setProducts] = useState(initialProducts);
-  const [viewMode, setViewMode] = useState('grid'); // grid | list
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+
+  React.useEffect(() => {
+    // Fetch categories first
+    fetch('/api/product-categories')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setCategories(resData.data);
+        }
+      })
+      .catch(err => console.error("Error loading categories:", err));
+
+    // Fetch products
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(p => ({
+            id: p.sku || p._id,
+            _id: p._id,
+            name: p.name,
+            image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400",
+            category: p.category?.name || p.category || 'Sports Shoes',
+            categoryId: p.category?._id || p.category,
+            description: p.description || '',
+            sizes: [6, 7, 8, 9, 10, 11],
+            colors: ["#ff0000", "#000000"],
+            mrp: 2999,
+            costPrice: 1200,
+            margin: 25,
+            status: p.lifecycle_status === 'Active' ? 'Active' : 'Inactive',
+            retailerMargin: 25,
+            cityManagerIncentive: 2,
+            stateManagerIncentive: 1,
+            hsn_code: '6403.99.90',
+            article_no: p.sku || 'ART-AC-01',
+            colour: 'Red',
+            franchise_points: 12.5
+          }));
+          setProducts(mapped);
+        } else {
+          setProducts(initialProducts);
+        }
+      })
+      .catch(err => {
+        console.error("Error loading products:", err);
+        setProducts(initialProducts);
+      });
+  }, []);
+
+  const [viewMode, setViewMode] = useState('grid'); // grid | list | edit
   const [viewingProd, setViewingProd] = useState(null);
   const [prodTab, setProdTab] = useState('overview'); // overview | matrix | commissions
 
@@ -13,7 +64,6 @@ export default function Products({ showToast }) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
 
-// HUDDO-UPDATE: Products — Added HSN Code, Article No, Colour, and Franchise Points to catalog forms, details overview, and lists, and renamed Cost Price to Franchise Cost Price
   // Form states
   const [formData, setFormData] = useState({
     name: '', category: 'Sports Shoes', description: '',
@@ -23,39 +73,213 @@ export default function Products({ showToast }) {
   });
   const [bulkAdjustment, setBulkAdjustment] = useState({ type: 'percent', value: '' });
 
+  // Edit states
+  const [editingProd, setEditingProd] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '', category: '', description: '',
+    sizes: [6, 7, 8, 9, 10], colors: ["#000000"],
+    mrp: '', costPrice: '', status: 'Active',
+    hsn_code: '', article_no: '', colour: '', franchise_points: ''
+  });
+
   const handleAddSubmit = (e) => {
     e.preventDefault();
     if (!formData.name || !formData.mrp || !formData.costPrice || !formData.article_no || !formData.hsn_code || !formData.colour || !formData.franchise_points) {
       showToast("Please fill all required footwear parameters.", "error");
       return;
     }
+    if (Number(formData.mrp) <= 0 || Number(formData.costPrice) <= 0) {
+      showToast("MRP and Cost Price must be greater than zero.", "error");
+      return;
+    }
+    if (Number(formData.costPrice) > Number(formData.mrp)) {
+      showToast("Cost Price cannot be greater than MRP.", "error");
+      return;
+    }
+    if (Number(formData.franchise_points) < 0) {
+      showToast("Franchise Points must be non-negative.", "error");
+      return;
+    }
+
+    // Resolve category name/ID
+    let resolvedCategory = formData.category;
+    let categoryName = formData.category;
+    const foundCat = categories.find(c => c._id === formData.category || c.name === formData.category);
+    if (foundCat) {
+      resolvedCategory = foundCat._id;
+      categoryName = foundCat.name;
+    } else if (categories.length > 0) {
+      resolvedCategory = categories[0]._id;
+      categoryName = categories[0].name;
+    }
 
     const marginVal = Math.round(((Number(formData.mrp) - Number(formData.costPrice)) / Number(formData.mrp)) * 100);
 
     const newProd = {
-      id: `P${products.length + 1}`,
       name: formData.name,
-      image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400",
-      category: formData.category,
+      sku: formData.article_no,
       description: formData.description,
-      sizes: formData.sizes,
-      colors: formData.colors,
-      mrp: Number(formData.mrp),
-      costPrice: Number(formData.costPrice),
-      margin: marginVal,
-      status: formData.status,
-      retailerMargin: 20,
-      cityManagerIncentive: 2,
-      stateManagerIncentive: 1,
-      hsn_code: formData.hsn_code,
-      article_no: formData.article_no,
-      colour: formData.colour,
-      franchise_points: Number(formData.franchise_points) || 0
+      is_active: formData.status === 'Active',
+      category: resolvedCategory
     };
 
-    setProducts([...products, newProd]);
-    setIsAddOpen(false);
-    showToast(`Product "${newProd.name}" added successfully with ${marginVal}% gross margin.`, "success");
+    // Save to database
+    fetch('/api/products', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(newProd)
+    })
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        const addedDbProd = data.data;
+        const newLocalProd = {
+          id: addedDbProd.sku || addedDbProd._id,
+          _id: addedDbProd._id,
+          name: addedDbProd.name,
+          image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400",
+          category: categoryName,
+          categoryId: resolvedCategory,
+          description: addedDbProd.description || '',
+          sizes: formData.sizes,
+          colors: formData.colors,
+          mrp: Number(formData.mrp),
+          costPrice: Number(formData.costPrice),
+          margin: marginVal,
+          status: formData.status,
+          retailerMargin: 20,
+          cityManagerIncentive: 2,
+          stateManagerIncentive: 1,
+          hsn_code: formData.hsn_code,
+          article_no: formData.article_no,
+          colour: formData.colour,
+          franchise_points: Number(formData.franchise_points) || 0
+        };
+        setProducts([...products, newLocalProd]);
+        setIsAddOpen(false);
+        showToast(`Product "${newLocalProd.name}" added successfully with ${marginVal}% gross margin.`, "success");
+      } else {
+        showToast(data.message || "Failed to save product in database.", "error");
+      }
+    })
+    .catch(err => {
+      console.error("Failed to save product:", err);
+      showToast("Network error: Failed to save product.", "error");
+    });
+  };
+
+  const handleStartEdit = (prod) => {
+    setEditingProd(prod);
+    setEditFormData({
+      name: prod.name || '',
+      category: prod.categoryId || prod.category || '',
+      description: prod.description || '',
+      sizes: prod.sizes || [6, 7, 8, 9, 10, 11],
+      colors: prod.colors || ["#ff0000", "#000000"],
+      mrp: prod.mrp || '',
+      costPrice: prod.costPrice || '',
+      status: prod.status || 'Active',
+      hsn_code: prod.hsn_code || '',
+      article_no: prod.article_no || prod.sku || '',
+      colour: prod.colour || '',
+      franchise_points: prod.franchise_points || ''
+    });
+    setViewMode('edit');
+  };
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editFormData.name || !editFormData.mrp || !editFormData.costPrice || !editFormData.article_no || !editFormData.hsn_code || !editFormData.colour || !editFormData.franchise_points) {
+      showToast("Please fill all required footwear parameters.", "error");
+      return;
+    }
+    if (Number(editFormData.mrp) <= 0 || Number(editFormData.costPrice) <= 0) {
+      showToast("MRP and Cost Price must be greater than zero.", "error");
+      return;
+    }
+    if (Number(editFormData.costPrice) > Number(editFormData.mrp)) {
+      showToast("Cost Price cannot be greater than MRP.", "error");
+      return;
+    }
+    if (Number(editFormData.franchise_points) < 0) {
+      showToast("Franchise Points must be non-negative.", "error");
+      return;
+    }
+
+    // Resolve category name/ID
+    let resolvedCategory = editFormData.category;
+    let categoryName = editFormData.category;
+    const foundCat = categories.find(c => c._id === editFormData.category || c.name === editFormData.category);
+    if (foundCat) {
+      resolvedCategory = foundCat._id;
+      categoryName = foundCat.name;
+    } else if (categories.length > 0) {
+      resolvedCategory = categories[0]._id;
+      categoryName = categories[0].name;
+    }
+
+    const marginVal = Math.round(((Number(editFormData.mrp) - Number(editFormData.costPrice)) / Number(editFormData.mrp)) * 100);
+
+    const updatedProdData = {
+      name: editFormData.name,
+      sku: editFormData.article_no,
+      description: editFormData.description,
+      is_active: editFormData.status === 'Active',
+      lifecycle_status: editFormData.status === 'Active' ? 'Active' : 'Discontinued',
+      category: resolvedCategory
+    };
+
+    const prodId = editingProd._id || editingProd.id;
+    fetch(`/api/products/${prodId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updatedProdData)
+    })
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        // Update local React state
+        setProducts(products.map(p => (p._id === prodId || p.id === prodId) ? {
+          ...p,
+          name: editFormData.name,
+          category: categoryName,
+          categoryId: resolvedCategory,
+          description: editFormData.description,
+          sizes: editFormData.sizes,
+          colors: editFormData.colors,
+          mrp: Number(editFormData.mrp),
+          costPrice: Number(editFormData.costPrice),
+          margin: marginVal,
+          status: editFormData.status,
+          hsn_code: editFormData.hsn_code,
+          article_no: editFormData.article_no,
+          colour: editFormData.colour,
+          franchise_points: Number(editFormData.franchise_points)
+        } : p));
+        
+        showToast(`Product "${editFormData.name}" updated successfully.`, "success");
+        setViewMode('grid'); // Redirect back to Product Catalog
+        setEditingProd(null);
+      } else {
+        showToast(data.message || "Failed to update product.", "error");
+      }
+    })
+    .catch(err => {
+      console.error("Failed to update product:", err);
+      showToast("Network error: Failed to update product.", "error");
+    });
+  };
+
+  const toggleSizeCheckboxEdit = (sz) => {
+    if (editFormData.sizes.includes(sz)) {
+      setEditFormData({ ...editFormData, sizes: editFormData.sizes.filter(s => s !== sz) });
+    } else {
+      setEditFormData({ ...editFormData, sizes: [...editFormData.sizes, sz] });
+    }
   };
 
   const handleBulkPriceUpdate = () => {
@@ -115,9 +339,14 @@ export default function Products({ showToast }) {
       </span>
     )},
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
-      <button onClick={() => { setViewingProd(row); setProdTab('overview'); }} className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs rounded hover:bg-slate-200 transition-colors">
-        Inspect
-      </button>
+      <div className="flex gap-2">
+        <button onClick={() => { setViewingProd(row); setProdTab('overview'); }} className="px-3 py-1 bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs rounded hover:bg-slate-200 transition-colors">
+          Inspect
+        </button>
+        <button onClick={() => handleStartEdit(row)} className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs rounded hover:bg-indigo-100 transition-colors">
+          Edit
+        </button>
+      </div>
     )}
   ];
 
@@ -167,16 +396,155 @@ export default function Products({ showToast }) {
       </div>
 
       {/* Main content display */}
-      {viewMode === 'grid' ? (
+      {viewMode === 'edit' ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm max-w-2xl mx-auto space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 font-display">Edit Footwear Product</h2>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">Modify parameters, sizes, and pricing indices for {editingProd?.name}.</p>
+            </div>
+            <button 
+              onClick={() => { setViewMode('grid'); setEditingProd(null); }}
+              className="px-3 py-1.5 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white transition-colors cursor-pointer"
+            >
+              Back to Catalog
+            </button>
+          </div>
+
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Footwear Product Name *</label>
+              <input type="text" placeholder="Huddo Flex Alpha" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Product Category</label>
+                <select value={editFormData.category} onChange={(e) => setEditFormData({...editFormData, category: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 bg-white text-slate-800 cursor-pointer">
+                  {categories.length > 0 ? (
+                    categories.map(cat => (
+                      <option key={cat._id} value={cat._id}>{cat.name}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Sports Shoes">Sports Shoes</option>
+                      <option value="Formal Shoes">Formal Shoes</option>
+                      <option value="Casual Shoes">Casual Shoes</option>
+                      <option value="Sandals">Sandals</option>
+                    </>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Base MRP (₹) *</label>
+                <input type="number" placeholder="2999" value={editFormData.mrp} onChange={(e) => setEditFormData({...editFormData, mrp: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Franchise Cost Price (₹) *</label>
+                <input type="number" placeholder="1200" value={editFormData.costPrice} onChange={(e) => setEditFormData({...editFormData, costPrice: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Catalog Status</label>
+                <select value={editFormData.status} onChange={(e) => setEditFormData({...editFormData, status: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 bg-white text-slate-800 cursor-pointer">
+                  <option value="Active">Active</option>
+                  <option value="Discontinued">Discontinued</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Article No. *</label>
+                <input type="text" placeholder="ART-XX-XX" value={editFormData.article_no} onChange={(e) => setEditFormData({...editFormData, article_no: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">HSN Code *</label>
+                <input type="text" placeholder="6403.XX.XX" value={editFormData.hsn_code} onChange={(e) => setEditFormData({...editFormData, hsn_code: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Colour *</label>
+                <input type="text" placeholder="Red / Black" value={editFormData.colour} onChange={(e) => setEditFormData({...editFormData, colour: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Franchise Points *</label>
+                <input type="number" step="0.01" placeholder="10.0" value={editFormData.franchise_points} onChange={(e) => setEditFormData({...editFormData, franchise_points: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Available UK Sizes</label>
+              <div className="flex gap-2 flex-wrap bg-slate-50 border border-slate-100 rounded-lg p-2">
+                {[5, 6, 7, 8, 9, 10, 11, 12].map(sz => {
+                  const isSelected = editFormData.sizes.includes(sz);
+                  return (
+                    <button 
+                      key={sz}
+                      type="button"
+                      onClick={() => toggleSizeCheckboxEdit(sz)}
+                      className={`w-8 h-8 rounded text-xs border font-bold transition-all cursor-pointer ${isSelected ? 'bg-brand-orange border-brand-orange text-white' : 'bg-white border-slate-200 text-slate-650'}`}
+                    >
+                      {sz}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Product Description</label>
+              <textarea rows="2" placeholder="Describe product details, synthetic meshes, outsoles..." value={editFormData.description} onChange={(e) => setEditFormData({...editFormData, description: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none" />
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+              <button 
+                type="button"
+                onClick={() => { setViewMode('grid'); setEditingProd(null); }}
+                className="px-4 py-2 border border-slate-200 hover:border-slate-300 rounded-lg text-sm font-semibold text-slate-700 bg-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                className="px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-sm font-bold rounded-lg shadow-sm transition-colors cursor-pointer"
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {products.map(prod => (
             <div 
               key={prod.id}
-              onClick={() => { setViewingProd(prod); setProdTab('overview'); }}
-              className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-brand-orange hover:shadow-md cursor-pointer transition-all duration-300 flex flex-col justify-between"
+              className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-brand-orange hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative"
             >
-              <img src={prod.image} alt={prod.name} className="w-full h-44 object-cover border-b border-slate-100" />
-              <div className="p-4 flex-1 flex flex-col justify-between">
+              <div className="relative overflow-hidden">
+                <img src={prod.image} alt={prod.name} className="w-full h-44 object-cover border-b border-slate-100" />
+                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setViewingProd(prod); setProdTab('overview'); }}
+                    className="p-2 bg-white text-slate-700 rounded-lg hover:bg-slate-100 transition-colors shadow-sm text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Inspect
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleStartEdit(prod); }}
+                    className="p-2 bg-brand-orange text-white rounded-lg hover:bg-brand-orange-hover transition-colors shadow-sm text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit className="w-3.5 h-3.5" /> Edit
+                  </button>
+                </div>
+              </div>
+              <div 
+                onClick={() => { setViewingProd(prod); setProdTab('overview'); }}
+                className="p-4 flex-1 flex flex-col justify-between cursor-pointer"
+              >
                 <div>
                   <span className="text-[9px] uppercase font-bold text-slate-400">{prod.category}</span>
                   <h3 className="text-sm font-bold text-slate-800 font-display mt-0.5">{prod.name}</h3>
@@ -214,11 +582,19 @@ export default function Products({ showToast }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-0.5">Product Category</label>
-              <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 bg-white">
-                <option value="Sports Shoes">Sports Shoes</option>
-                <option value="Formal Shoes">Formal Shoes</option>
-                <option value="Casual Shoes">Casual Shoes</option>
-                <option value="Sandals">Sandals</option>
+              <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full text-sm border border-slate-200 rounded-lg p-2 bg-white text-slate-800 cursor-pointer">
+                {categories.length > 0 ? (
+                  categories.map(cat => (
+                    <option key={cat._id} value={cat._id}>{cat.name}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="Sports Shoes">Sports Shoes</option>
+                    <option value="Formal Shoes">Formal Shoes</option>
+                    <option value="Casual Shoes">Casual Shoes</option>
+                    <option value="Sandals">Sandals</option>
+                  </>
+                )}
               </select>
             </div>
             <div>
@@ -395,7 +771,7 @@ export default function Products({ showToast }) {
               {prodTab === 'matrix' && (
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold text-slate-500 uppercase">Size × Color × Stock Variant Matrix</h4>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="border border-slate-200 rounded-lg overflow-x-auto">
                     <table className="w-full text-left text-xs font-semibold text-slate-700">
                       <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                         <tr>

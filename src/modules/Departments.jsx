@@ -16,16 +16,47 @@ const ICONS_MAP = {
 };
 
 export default function Departments({ showToast }) {
-  const [departments, setDepartments] = useState(initialDepartmentsDetails);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedDeptId, setSelectedDeptId] = useState(null); // id | null
 
   // HUDDO-UPDATE: Department — Employee list and selected checkboxes state
-  const [employeesList, setEmployeesList] = useState(initialEmployees);
+  const [employeesList, setEmployeesList] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState(new Set());
 
   // Create Department modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newDeptForm, setNewDeptForm] = useState({ name: '', code: '', manager_id: '', description: '' });
+  const [newDeptForm, setNewDeptForm] = useState({ name: '', code: '', head: '', description: '' });
+
+  // Fetch departments and employees on mount
+  React.useEffect(() => {
+    fetchDepartments();
+    fetchEmployees();
+  }, []);
+
+  const fetchDepartments = () => {
+    fetch('/api/departments')
+      .then(res => res.json())
+      .then(res => {
+        const data = res.data || res;
+        setDepartments(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching departments", err);
+        setLoading(false);
+      });
+  };
+
+  const fetchEmployees = () => {
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(res => {
+        const data = res.data || res;
+        setEmployeesList(Array.isArray(data) ? data : []);
+      })
+      .catch(err => console.error("Error fetching employees", err));
+  };
 
   const handleCreateDeptSubmit = (e) => {
     e.preventDefault();
@@ -34,7 +65,7 @@ export default function Departments({ showToast }) {
       return;
     }
 
-    fetch('/api/departments/create', {
+    fetch('/api/departments', {
       method: 'POST',
       body: JSON.stringify(newDeptForm)
     })
@@ -42,10 +73,11 @@ export default function Departments({ showToast }) {
         if (!res.ok) throw new Error("Creation failed");
         return res.json();
       })
-      .then(newDept => {
+      .then(res => {
+        const newDept = res.data || res;
         setDepartments([...departments, newDept]);
         setIsCreateOpen(false);
-        setNewDeptForm({ name: '', code: '', manager_id: '', description: '' });
+        setNewDeptForm({ name: '', code: '', head: '', description: '' });
         showToast(`Department "${newDept.name}" created successfully.`, "success");
       })
       .catch(err => {
@@ -55,30 +87,62 @@ export default function Departments({ showToast }) {
   };
 
   const handleToggleFeature = (deptId, featureKey) => {
-    setDepartments(departments.map(dept => {
-      if (dept.id === deptId) {
-        const currentVal = dept.features[featureKey];
-        const updatedFeatures = {
-          ...dept.features,
-          [featureKey]: !currentVal
-        };
+    const dept = departments.find(d => d.id === deptId || d._id === deptId);
+    if (!dept) return;
+
+    const currentVal = dept.features ? dept.features[featureKey] : false;
+    const updatedFeatures = {
+      ...(dept.features || {}),
+      [featureKey]: !currentVal
+    };
+
+    fetch(`/api/departments/${deptId || dept._id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ features: updatedFeatures })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Update failed");
+        return res.json();
+      })
+      .then(res => {
+        const updatedDept = res.data || res;
+        setDepartments(departments.map(d => (d.id === deptId || d._id === deptId) ? updatedDept : d));
         showToast(
-          `${featureKey} feature has been ${!currentVal ? 'enabled' : 'disabled'} for ${dept.id} Department.`,
+          `${featureKey} feature has been ${!currentVal ? 'enabled' : 'disabled'} for ${dept.name || dept.id} Department.`,
           "success"
         );
-        return {
-          ...dept,
-          features: updatedFeatures
-        };
-      }
-      return dept;
-    }));
+      })
+      .catch(err => {
+        showToast("Error updating department feature.", "error");
+        console.error(err);
+      });
   };
 
-  const selectedDept = departments.find(d => d.id === selectedDeptId);
+  // Helper to filter roster list by department
+  const getDeptEmployees = (dept) => {
+    if (!dept) return [];
+    return employeesList.filter(emp => {
+      const empDept = emp.department?._id || emp.department?.id || emp.department;
+      const targetId = dept._id || dept.id;
+      const empDeptName = emp.department?.name || emp.department;
+      return empDept === targetId || empDeptName === dept.name || empDeptName === dept.id;
+    });
+  };
+
+  const selectedDept = departments.find(d => d.id === selectedDeptId || d._id === selectedDeptId);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-sm font-semibold text-slate-500">Loading department configurations...</div>
+      </div>
+    );
+  }
 
   if (selectedDept) {
     const IconComponent = ICONS_MAP[selectedDept.icon] || LayoutGrid;
+    const deptEmps = getDeptEmployees(selectedDept);
     return (
       <div className="space-y-6">
         {/* Detail View Header */}
@@ -99,11 +163,11 @@ export default function Departments({ showToast }) {
               <span className="text-[10px] uppercase font-bold text-slate-400">Department Overview</span>
               <h1 className="text-xl font-bold text-slate-900 font-display mt-0.5">{selectedDept.name}</h1>
               <p className="text-xs text-slate-500 font-semibold flex items-center gap-2 mt-1">
-                <span>Head: <strong>{selectedDept.head}</strong></span>
+                <span>Head: <strong>{selectedDept.head?.full_name || selectedDept.head?.name || selectedDept.head || 'Not Assigned'}</strong></span>
                 <span>•</span>
-                <span>Members: <strong>{selectedDept.members}</strong></span>
+                <span>Members: <strong>{deptEmps.length || selectedDept.members || 0}</strong></span>
                 <span>•</span>
-                <span>Teams: <strong>{selectedDept.teams}</strong></span>
+                <span>Teams: <strong>{selectedDept.teams || 0}</strong></span>
               </p>
             </div>
           </div>
@@ -117,7 +181,7 @@ export default function Departments({ showToast }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            {Object.entries(selectedDept.features).map(([featureKey, isEnabled]) => (
+            {selectedDept.features && Object.entries(selectedDept.features).map(([featureKey, isEnabled]) => (
               <div 
                 key={featureKey}
                 className="flex items-center justify-between p-4 border border-slate-100 hover:border-slate-200 rounded-xl bg-slate-50/30 transition-all"
@@ -129,7 +193,7 @@ export default function Departments({ showToast }) {
                 
                 {/* Custom Toggle Switch */}
                 <button 
-                  onClick={() => handleToggleFeature(selectedDept.id, featureKey)}
+                  onClick={() => handleToggleFeature(selectedDept.id || selectedDept._id, featureKey)}
                   className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${
                     isEnabled ? 'bg-brand-orange' : 'bg-slate-300'
                   }`}
@@ -140,6 +204,11 @@ export default function Departments({ showToast }) {
                 </button>
               </div>
             ))}
+            {(!selectedDept.features || Object.keys(selectedDept.features).length === 0) && (
+              <div className="col-span-2 text-center py-6 text-slate-400 font-semibold">
+                No feature switches configured for this department.
+              </div>
+            )}
           </div>
         </div>
 
@@ -156,20 +225,19 @@ export default function Departments({ showToast }) {
               </span>
             )}
           </div>
-          <div className="border border-slate-100 rounded-lg overflow-hidden">
+          <div className="border border-slate-100 rounded-lg overflow-x-auto">
             <table className="w-full text-left text-xs font-semibold text-slate-700">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                 <tr>
                   <th className="px-4 py-3 w-10">
                     <input 
                       type="checkbox"
-                      checked={employeesList.filter(emp => emp.department === selectedDept.id).length > 0 && selectedEmployees.size === employeesList.filter(emp => emp.department === selectedDept.id).length}
+                      checked={deptEmps.length > 0 && selectedEmployees.size === deptEmps.length}
                       onChange={() => {
-                        const deptEmps = employeesList.filter(emp => emp.department === selectedDept.id);
                         if (selectedEmployees.size === deptEmps.length) {
                           setSelectedEmployees(new Set());
                         } else {
-                          setSelectedEmployees(new Set(deptEmps.map(emp => emp.id)));
+                          setSelectedEmployees(new Set(deptEmps.map(emp => emp.id || emp._id)));
                         }
                       }}
                       className="w-4 h-4 rounded text-brand-orange border-slate-300 cursor-pointer"
@@ -183,21 +251,22 @@ export default function Departments({ showToast }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {employeesList.filter(emp => emp.department === selectedDept.id).length > 0 ? (
-                  employeesList.filter(emp => emp.department === selectedDept.id).map(emp => {
-                    const isChecked = selectedEmployees.has(emp.id);
+                {deptEmps.length > 0 ? (
+                  deptEmps.map(emp => {
+                    const empId = emp.id || emp._id;
+                    const isChecked = selectedEmployees.has(empId);
                     return (
-                      <tr key={emp.id} className="hover:bg-slate-50/20">
+                      <tr key={empId} className="hover:bg-slate-50/20">
                         <td className="px-4 py-2.5">
                           <input 
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => {
                               const newSelected = new Set(selectedEmployees);
-                              if (newSelected.has(emp.id)) {
-                                newSelected.delete(emp.id);
+                              if (newSelected.has(empId)) {
+                                newSelected.delete(empId);
                               } else {
-                                newSelected.add(emp.id);
+                                newSelected.add(empId);
                               }
                               setSelectedEmployees(newSelected);
                             }}
@@ -205,14 +274,14 @@ export default function Departments({ showToast }) {
                           />
                         </td>
                         <td className="px-4 py-2.5">
-                          <img src={emp.avatar} alt={emp.name} className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                          <img src={emp.avatar || emp.profile_photo || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"} alt={emp.full_name || emp.name} className="w-7 h-7 rounded-full object-cover border border-slate-200" />
                         </td>
-                        <td className="px-4 py-2.5 text-slate-500">{emp.id}</td>
-                        <td className="px-4 py-2.5 text-slate-900 font-bold">{emp.name}</td>
-                        <td className="px-4 py-2.5 text-slate-500">{emp.designation}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{emp.employee_code || emp.id || emp._id}</td>
+                        <td className="px-4 py-2.5 text-slate-900 font-bold">{emp.full_name || emp.name}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{emp.designation?.title || emp.designation || 'Sales Executive'}</td>
                         <td className="px-4 py-2.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${emp.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                            {emp.status}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${emp.status === 'Active' || emp.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                            {emp.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                       </tr>
@@ -256,22 +325,24 @@ export default function Departments({ showToast }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {departments.map(dept => {
           const IconComponent = ICONS_MAP[dept.icon] || TrendingUp;
+          const deptEmps = getDeptEmployees(dept);
+          const deptId = dept.id || dept._id;
           return (
             <div 
-              key={dept.id}
-              onClick={() => setSelectedDeptId(dept.id)}
+              key={deptId}
+              onClick={() => setSelectedDeptId(deptId)}
               className="bg-white border border-slate-200 rounded-xl p-5 hover:border-brand-orange hover:shadow-md cursor-pointer transition-all duration-300 flex flex-col justify-between"
             >
               <div className="flex items-start justify-between">
                 <span className="p-3 bg-slate-50 text-slate-700 border border-slate-100 rounded-xl group-hover:text-brand-orange transition-colors">
                   <IconComponent className="w-6 h-6 text-brand-orange" />
                 </span>
-                <span className="text-[10px] text-slate-400 font-semibold">{dept.members} Personnel Mapped</span>
+                <span className="text-[10px] text-slate-400 font-semibold">{deptEmps.length || dept.members || 0} Personnel Mapped</span>
               </div>
               
               <div className="mt-4">
                 <h3 className="text-base font-bold text-slate-800 font-display">{dept.name}</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-1">Division Head: {dept.head}</p>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Division Head: {dept.head?.full_name || dept.head?.name || dept.head || 'Not Assigned'}</p>
                 <p className="text-[10px] text-slate-400 mt-2 font-medium">Click to configure feature toggles...</p>
               </div>
             </div>
@@ -311,14 +382,17 @@ export default function Departments({ showToast }) {
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assign Manager</label>
             <select
-              value={newDeptForm.manager_id}
-              onChange={(e) => setNewDeptForm({ ...newDeptForm, manager_id: e.target.value })}
+              value={newDeptForm.head}
+              onChange={(e) => setNewDeptForm({ ...newDeptForm, head: e.target.value })}
               className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-orange/20 text-slate-800"
             >
               <option value="">Select Manager...</option>
-              {employeesList.map(emp => (
-                <option key={emp.id} value={emp.name}>{emp.name} ({emp.designation})</option>
-              ))}
+              {employeesList.map(emp => {
+                const userId = emp.user?._id || emp.user || '';
+                return (
+                  <option key={emp.id || emp._id} value={userId}>{emp.full_name || emp.name} ({emp.designation?.title || emp.designation || 'Sales Executive'})</option>
+                );
+              })}
             </select>
           </div>
           <div>

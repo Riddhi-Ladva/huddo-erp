@@ -94,7 +94,7 @@ export default function PromoterView({ promoters, retailers }) {
 
                 {/* Expandable Outlets List */}
                 {isExpanded && (
-                  <div className="mt-2 border border-slate-150 rounded-xl overflow-hidden text-[11px] font-semibold bg-white animate-fade-in">
+                  <div className="mt-2 border border-slate-150 rounded-xl overflow-x-auto text-[11px] font-semibold bg-white animate-fade-in">
                     <table className="w-full text-left">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-150 text-[9px] text-slate-400 font-bold uppercase">

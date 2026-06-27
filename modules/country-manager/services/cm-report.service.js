@@ -43,19 +43,7 @@ export async function generateRetailerReport(cmId, filters) {
   };
 }
 
-/**
- * Generates territory breakdown reports.
- */
-export async function generateTerritoryReport(cmId, filters) {
-  // CM-MODULE: Read territory report
-  console.log(`[Service] Generating territory report for CM ${cmId} with filters:`, filters);
-  return {
-    country_overview: { states: 0, cities: 0, retailers: 0, revenue: 0 },
-    state_rankings: [],
-    city_rankings: [],
-    underperforming: []
-  };
-}
+
 
 /**
  * Helper to construct a CSV file buffer.

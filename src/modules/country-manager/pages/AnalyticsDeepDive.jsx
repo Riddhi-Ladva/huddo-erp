@@ -225,8 +225,8 @@ export default function AnalyticsDeepDive({ cmId, showToast }) {
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 font-display uppercase tracking-wide">Section B — City Performance</h3>
-                  <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Top performing cities in the territory, sortable by revenue.</p>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">City Rankings</h4>
+                  <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Top performing cities in the country, sortable by revenue.</p>
                 </div>
                 <button onClick={() => handleExport("Cities")} className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-slate-800 transition-colors cursor-pointer">
                   <Download className="w-3.5 h-3.5" />

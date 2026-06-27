@@ -130,28 +130,6 @@ router.get('/:id/dashboard', async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// 4. TERRITORY & PERFORMANCE
-// ────────────────────────────────────────────────────────────────────────
-
-// GET /api/country-managers/:id/territory/performance
-router.get('/:id/territory/performance', async (req, res) => {
-  // CM-MODULE: Read pre-calculated metrics or aggregate live
-  res.json({ country_summary: {}, state_breakdown: [], city_breakdown: [], period_comparison: {} });
-});
-
-// GET /api/country-managers/:id/territory/map-data
-router.get('/:id/territory/map-data', async (req, res) => {
-  // CM-MODULE: Return map data markers for states
-  res.json({ country_id: 1, country_name: "India", states: [] });
-});
-
-// POST /api/country-managers/:id/territory/transfer
-router.post('/:id/territory/transfer', async (req, res) => {
-  // CM-MODULE: Move state/city between Country Managers
-  res.json({ transferred: true, message: "Territory moved successfully." });
-});
-
-// ────────────────────────────────────────────────────────────────────────
 // 5. ORDER APPROVALS
 // ────────────────────────────────────────────────────────────────────────
 

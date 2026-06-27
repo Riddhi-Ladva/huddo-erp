@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { MapPin, Search, Calendar, CheckCircle2, Navigation, Clock, User, Eye, Layers } from 'lucide-react';
-import { fieldTrackingList, visitLogs, routeHistories } from '../mockData';
+import { fieldTrackingList, visitLogs } from '../mockData';
 import { DataTable } from '../components/Common';
 
 export default function FieldTracking({ showToast }) {
-  const [activeTab, setActiveTab] = useState('tracker'); // tracker | visitLog | attendance | activity | route
+  const [activeTab, setActiveTab] = useState('tracker'); // tracker | visitLog | attendance | activity
   const [representatives] = useState(fieldTrackingList);
   const [logs] = useState(visitLogs);
 
@@ -61,7 +61,7 @@ export default function FieldTracking({ showToast }) {
       </div>
 
       {/* Main Tabs Navigation */}
-      <div className="flex border-b border-slate-200 overflow-x-auto">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveTab('tracker')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'tracker' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -86,12 +86,7 @@ export default function FieldTracking({ showToast }) {
         >
           Daily Activity Report
         </button>
-        <button 
-          onClick={() => setActiveTab('route')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'route' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-        >
-          Route Histories timeline
-        </button>
+
       </div>
 
       {/* Contents */}
@@ -115,7 +110,10 @@ export default function FieldTracking({ showToast }) {
                     left: `${30 + idx * 22}%`, 
                     top: `${40 + (idx % 2 === 0 ? 15 : -15)}%` 
                   }}
-                  onClick={() => showToast(`Selected representative: ${rep.name}`, "success")}
+                  onClick={() => {
+                    setSelectedRep(rep.name);
+                    showToast(`Selected representative: ${rep.name}`, "success");
+                  }}
                 >
                   <div className="bg-slate-900 border border-slate-700 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-md whitespace-nowrap mb-1">
                     {rep.name} ({rep.visitsToday} visits)
@@ -170,7 +168,7 @@ export default function FieldTracking({ showToast }) {
             </div>
           </div>
 
-          <div className="border border-slate-100 rounded-lg overflow-hidden text-xs">
+          <div className="border border-slate-100 rounded-lg overflow-x-auto text-xs">
             <table className="w-full text-left font-semibold text-slate-700">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                 <tr>
@@ -245,36 +243,7 @@ export default function FieldTracking({ showToast }) {
         </div>
       )}
 
-      {activeTab === 'route' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
-          <div className="flex gap-4 items-center">
-            <div>
-              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">Select Representative</label>
-              <select value={selectedRep} onChange={(e) => setSelectedRep(e.target.value)} className="text-xs border border-slate-200 rounded p-2 bg-white">
-                <option value="Amit Kumar">Amit Kumar</option>
-                <option value="Suresh Gowda">Suresh Gowda</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">Tracking Date</label>
-              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-xs border border-slate-200 rounded p-2 bg-white" />
-            </div>
-          </div>
 
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-bold text-slate-900 font-display">Route History Timeline</h3>
-            <div className="relative border-l-2 border-slate-200 pl-6 space-y-6 text-xs font-semibold text-slate-700">
-              {(routeHistories[selectedRep] || []).map((route, i) => (
-                <div key={i} className="relative">
-                  <span className="absolute -left-[30px] top-1 w-3 h-3 bg-brand-orange border-2 border-white rounded-full"></span>
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" />{route.time}</span>
-                  <p className="text-slate-800 font-bold mt-0.5">{route.location}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

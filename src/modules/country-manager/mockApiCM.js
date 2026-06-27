@@ -737,20 +737,7 @@ export async function handleCountryManagerApi(pathname, method, body, params) {
       });
     }
 
-    if (reportType === 'territory') {
-      return jsonResponse({
-        country_overview: { states: 5, cities: 14, retailers: 48, revenue: 12450000 },
-        state_rankings: [
-          { state_name: "Maharashtra", revenue: 4500000, rank: 1 },
-          { state_name: "Delhi", revenue: 3200000, rank: 2 }
-        ],
-        city_rankings: [
-          { city_name: "New Delhi", revenue: 3200000, rank: 1 },
-          { city_name: "Mumbai", revenue: 2800000, rank: 2 }
-        ],
-        underperforming: []
-      });
-    }
+
 
     if (reportType === 'commissions') {
       return jsonResponse({

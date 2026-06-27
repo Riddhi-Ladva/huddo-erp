@@ -1,12 +1,14 @@
 import './mockApi'; // Global window.fetch interceptor
 import React, { useState, useEffect } from 'react';
 import { 
-  Home, GitBranch, LayoutGrid, Map, Users, UsersRound, Award, Store, Package, 
+  Home, GitBranch, LayoutGrid, Users, UsersRound, Award, Store, Package, 
   ShoppingCart, CreditCard, Percent, TrendingUp, Target, MapPin, CheckSquare, 
   Archive, Shield, Bell, BarChart3, Lock, ChevronLeft, ChevronRight, Search, 
   Menu, LogOut, Settings, User, X, ShoppingBag
 } from 'lucide-react';
 import { Toast } from './components/Common';
+import { DashboardLayout } from './components/DesignSystem';
+import Login from './components/Login';
 
 // Import All 21 Modules
 import Dashboard from './modules/Dashboard';
@@ -21,7 +23,6 @@ import Products from './modules/Products';
 import Orders from './modules/Orders';
 import BillingPayments from './modules/BillingPayments';
 import Commissions from './modules/Commissions';
-import Territory from './modules/Territory';
 import Sales from './modules/Sales';
 import Targets from './modules/Targets';
 import Approvals from './modules/Approvals';
@@ -31,7 +32,6 @@ import Reports from './modules/Reports';
 import Security from './modules/Security';
 import Inventory from './modules/Inventory';
 import Purchase from './modules/Purchase';
-import Customers from './modules/Customers';
 import PettyCash from './modules/PettyCash';
 import RetailerModule from './modules/retailer/RetailerModule';
 // CM-MODULE: Import Country Manager Module
@@ -44,6 +44,8 @@ import CityManagerModule from './city-manager/CityManagerModule';
 import PromoterModule from './modules/promoter/PromoterModule';
 // EMPLOYEE-MODULE: Import Employee Module
 import EmployeeModule from './modules/employee/EmployeeModule';
+import CommunicationSettings from './modules/CommunicationSettings';
+import MyProfile from './modules/MyProfile';
 
 
 
@@ -59,8 +61,7 @@ const NAV_MENU = [
     section: "ORGANIZATION",
     items: [
       { id: "Hierarchy", label: "Hierarchy", icon: GitBranch, component: Hierarchy },
-      { id: "Departments", label: "Departments", icon: LayoutGrid, component: Departments },
-      { id: "Territories", label: "Territories", icon: Map, component: Territory }
+      { id: "Departments", label: "Departments", icon: LayoutGrid, component: Departments }
     ]
   },
   {
@@ -77,9 +78,7 @@ const NAV_MENU = [
     items: [
       { id: "Retailers", label: "Retailers", icon: Store, component: Retailers },
       { id: "Products", label: "Products", icon: Package, component: Products },
-      { id: "Orders", label: "Orders", icon: ShoppingCart, component: Orders },
-      { id: "Customers", label: "Customers", icon: Users, component: Customers },
-      { id: "RetailerPanel", label: "Retailer Panel (Mock)", icon: Store, component: RetailerModule }
+      { id: "Orders", label: "Orders", icon: ShoppingCart, component: Orders }
     ]
   },
   {
@@ -109,89 +108,222 @@ const NAV_MENU = [
       { id: "Reports", label: "Reports", icon: BarChart3, component: Reports },
       { id: "Security & Audit", label: "Security & Audit", icon: Lock, component: Security }
     ]
+  },
+  {
+    section: "FOUNDER",
+    items: [
+      { id: "CommunicationSettings", label: "Communication Settings", icon: Settings, component: CommunicationSettings }
+    ]
   }
 ];
+
+// Database-to-navigation module permissions mapping
+const NAV_MODULE_MAP = {
+  'Dashboard': 'dashboard',
+  'Hierarchy': 'hierarchy',
+  'Departments': 'departments',
+  'Employees': 'employees',
+  'Teams': 'teams',
+  'Promoters': 'promoters',
+  'CountryManagers': 'countries',
+  'Retailers': 'retailers',
+  'Products': 'products',
+  'Orders': 'orders',
+  'Billing': 'invoices',
+  'Commissions': 'commission-records',
+  'Sales': 'sales',
+  'Targets': 'targets',
+  'Petty Cash': 'petty-cash',
+  'Field Tracking': 'gps-logs',
+  'Approvals': 'orders',
+  'Inventory': 'stock-records',
+  'Purchase': 'purchase-orders',
+  'Users & Roles': 'users',
+  'Notifications': 'notifications',
+  'Reports': 'reports',
+  'Security & Audit': 'audit-logs',
+  'CommunicationSettings': 'communication-settings'
+};
 
 export default function App() {
   const [activeScreen, setActiveScreen] = useState('Dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [toast, setToast] = useState(null);
   
-  // HUDDO-UPDATE: Core — Added simulated role state and RBAC route filtering
+  // Real authentication & session persistence states
+  const [token, setToken] = useState(() => localStorage.getItem('huddo_token'));
+  const [user, setUser] = useState(() => {
+    const cached = localStorage.getItem('huddo_user');
+    try {
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
   const [currentRole, setCurrentRole] = useState(() => localStorage.getItem('huddo_role') || 'Founder');
 
-  const handleRoleChange = (role) => {
-    setCurrentRole(role);
-    localStorage.setItem('huddo_role', role);
-    showToast(`Simulated active session changed to: ${role}`, "success");
-  };
-
-  const canViewItem = (itemId) => {
-    if (itemId === 'CountryManagers') {
-      return ["Founder", "CEO", "Admin"].includes(currentRole);
-    }
-    if (itemId === 'Customers') {
-      return ["Founder", "CEO", "Admin", "Country Manager", "State Manager", "City Manager"].includes(currentRole);
-    }
-    if (itemId === 'Petty Cash') {
-      return ["Founder", "CEO", "Admin", "Finance Manager"].includes(currentRole);
-    }
-    return true;
-  };
-
   useEffect(() => {
-    if (!canViewItem(activeScreen)) {
-      setActiveScreen('Dashboard');
-    }
-  }, [currentRole, activeScreen]);
-
-  // Header menu states
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Toast State
-  const [toast, setToast] = useState(null);
-
-  // Global Keybindings (Ctrl+K for search command palette)
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsSearchOpen(true);
+    const handleProfileUpdate = () => {
+      const cached = localStorage.getItem('huddo_user');
+      try {
+        if (cached) setUser(JSON.parse(cached));
+      } catch (e) {
+        console.error(e);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('profileUpdated', handleProfileUpdate);
   }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
   };
 
-  // Find active screen component
-  let ActiveComponent = Dashboard;
-  let activeLabel = "Dashboard";
-  let activeSection = "OVERVIEW";
+  const handleRoleChange = async (role) => {
+    if (role === 'Logout') {
+      localStorage.removeItem('huddo_token');
+      localStorage.removeItem('huddo_user');
+      localStorage.removeItem('huddo_role');
+      setToken(null);
+      setUser(null);
+      setCurrentRole('Founder');
+      showToast("Logged out successfully.", "success");
+      return;
+    }
 
-  for (const sect of NAV_MENU) {
-    const match = sect.items.find(item => item.id === activeScreen);
-    if (match) {
-      ActiveComponent = match.component;
-      activeLabel = match.label;
-      activeSection = sect.section;
-      break;
+    setCurrentRole(role);
+    localStorage.setItem('huddo_role', role);
+    showToast(`Session switched to: ${role}`, "success");
+
+    const roleEmailMap = {
+      'Founder': 'rohan@huddoerp.in',
+      'CEO': 'rohan@huddoerp.in',
+      'Admin': 'rohan@huddoerp.in',
+      'Country Manager': 'rajesh@huddoerp.in',
+      'State Manager': 'preeti@huddoerp.in',
+      'City Manager': 'sanjay@huddoerp.in',
+      'Finance Manager': 'vikram@huddoerp.in',
+      'HR Manager': 'neha@huddoerp.in',
+      'Inventory Manager': 'sunil@huddoerp.in',
+      'Sales Executive': 'arjun@huddoerp.in',
+      'Promoter': 'suresh@promoter.com',
+      'Retailer': 'dinesh@walkeasy.in',
+      'Distributor': 'dinesh@walkeasy.in',
+      'Team Member': 'arjun@huddoerp.in'
+    };
+
+    const email = roleEmailMap[role];
+    if (email) {
+      try {
+        const fetchMethod = window.originalFetch || window.fetch;
+        const res = await fetchMethod('http://localhost:5000/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: 'password123' })
+        });
+        const data = await res.json();
+        if (data.success && data.data.access_token) {
+          localStorage.setItem('huddo_token', data.data.access_token);
+          localStorage.setItem('huddo_user', JSON.stringify(data.data.user));
+          setToken(data.data.access_token);
+          setUser(data.data.user);
+          console.log(`[Auth] Backend JWT authenticated successfully for ${role}`);
+        }
+      } catch (err) {
+        console.warn(`[Auth] Backend login failed: ${err.message}`);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Authenticate initial role on mount if logged in
+    if (token) {
+      handleRoleChange(currentRole);
+    }
+  }, []);
+
+  const canViewItem = (itemId) => {
+    if (!user || !user.role) return false;
+    
+    const roleName = user.role.name || user.role;
+    
+    // Strict restriction: only Founder can view Communication Settings
+    if (itemId === 'CommunicationSettings') {
+      return roleName === 'Founder';
+    }
+    
+    // CEO has no access to financial modules
+    const financialItems = ['Billing', 'Commissions', 'Sales', 'Targets', 'Petty Cash'];
+    if (roleName === 'CEO' && financialItems.includes(itemId)) {
+      return false;
+    }
+    
+    // Founder, CEO, and Admin have superadmin view rights across routing on client side
+    if (roleName === 'Founder' || roleName === 'CEO' || roleName === 'Admin') {
+      return true;
+    }
+    
+    const permissions = user.role.permissions || [];
+    const targetModule = NAV_MODULE_MAP[itemId];
+    if (!targetModule) return true; // Default true if not explicitly mapped
+    
+    const match = permissions.find(p => p.module === targetModule || p.module === '*');
+    if (!match) return false;
+    
+    return match.actions.includes('view') || match.actions.includes('*');
+  };
+
+  useEffect(() => {
+    if (token && !canViewItem(activeScreen)) {
+      setActiveScreen('Dashboard');
+    }
+  }, [currentRole, activeScreen, token]);
+
+  // Mock notifications state for Admin/Founder/CEO
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: "Pending Shop Verification", message: "Apex Sole Distributors requested Silver category authorization in Pune.", read: false, date: "10 mins ago" },
+    { id: 2, title: "Large Order Review Required", message: "Order ORD-5509 of value ₹1,50,000 exceeds standard limit limits.", read: false, date: "2 hours ago" }
+  ]);
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    showToast("Marked all notifications as read.", "success");
+  };
+
+  // If not logged in, render the login page
+  if (!token || !user) {
+    return (
+      <Login 
+        onLoginSuccess={(userData, userToken) => {
+          localStorage.setItem('huddo_token', userToken);
+          localStorage.setItem('huddo_user', JSON.stringify(userData));
+          localStorage.setItem('huddo_role', userData.role?.name || userData.role || 'Founder');
+          setToken(userToken);
+          setUser(userData);
+          setCurrentRole(userData.role?.name || userData.role || 'Founder');
+          showToast(`Logged in successfully as ${userData.name}!`, "success");
+        }} 
+      />
+    );
+  }
+
+  // Find active screen component details
+  let ActiveComponent = Dashboard;
+  if (activeScreen === 'Profile') {
+    ActiveComponent = MyProfile;
+  } else {
+    for (const sect of NAV_MENU) {
+      const match = sect.items.find(item => item.id === activeScreen);
+      if (match) {
+        ActiveComponent = match.component;
+        break;
+      }
     }
   }
 
-  // Filter modules for search palette
-  const allNavItems = NAV_MENU.reduce((acc, curr) => [...acc, ...curr.items], []);
-  const searchedItems = searchQuery.trim() === '' ? [] : allNavItems.filter(item => 
-    item.label.toLowerCase().includes(searchQuery.toLowerCase()) && canViewItem(item.id)
-  );
-
-  // HUDDO-UPDATE: Retailer Panel - Full Screen override
-  if (currentRole.toLowerCase() === 'retailer') {
+  // HUDDO-UPDATE: Retailer & Distributor Panel - Full Screen override
+  if (currentRole.toLowerCase() === 'retailer' || currentRole.toLowerCase() === 'distributor') {
     return (
       <RetailerModule 
         userRole={currentRole} 
@@ -261,268 +393,29 @@ export default function App() {
     );
   }
 
+  // Filter navigation sections based on RBAC permissions
+  const filteredSidebarItems = NAV_MENU.map(section => ({
+    ...section,
+    items: section.items.filter(item => canViewItem(item.id))
+  })).filter(section => section.items.length > 0);
 
   return (
-    <div className="min-h-screen flex bg-slate-50 relative font-sans antialiased text-slate-800">
+    <DashboardLayout
+      userRole={currentRole}
+      activeTab={activeScreen}
+      setActiveTab={setActiveScreen}
+      sidebarItems={filteredSidebarItems}
+      onSwitchRole={handleRoleChange}
+      notifications={notifications}
+      onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+      profile={{
+        name: user?.name || "Rohan Hudda",
+        subtitle: `${currentRole} Session`,
+        image: user?.profile_photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
+      }}
+    >
+      <ActiveComponent onNavigate={(target) => setActiveScreen(target)} showToast={showToast} userRole={currentRole} />
       
-      {/* 1. persistent Sidebar */}
-      <aside 
-        className={`bg-slate-900 text-slate-300 h-screen sticky top-0 flex flex-col justify-between transition-all duration-300 z-30 shrink-0 ${
-          sidebarCollapsed ? 'w-[64px]' : 'w-[256px]'
-        }`}
-      >
-        <div>
-          {/* Logo Brand area */}
-          <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800">
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-2">
-                <span className="w-8 h-8 rounded-lg bg-brand-orange flex items-center justify-center font-bold text-white font-display text-base shadow-md">H</span>
-                <span className="font-extrabold text-base tracking-wider text-white font-display">HUDDO ERP</span>
-              </div>
-            )}
-            {sidebarCollapsed && (
-              <span className="w-8 h-8 mx-auto rounded-lg bg-brand-orange flex items-center justify-center font-extrabold text-white font-display text-sm">H</span>
-            )}
-          </div>
-
-          {/* Nav Items list */}
-          <nav className="p-3 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
-            {NAV_MENU.map((section, idx) => (
-              <div key={idx} className="space-y-1">
-                {/* Section Header */}
-                {!sidebarCollapsed ? (
-                  <span className="block text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3 py-1.5">{section.section}</span>
-                ) : (
-                  <div className="border-t border-slate-800/80 my-2"></div>
-                )}
-
-                {/* Section Items */}
-                {section.items.filter(item => canViewItem(item.id)).map(item => {
-                  const Icon = item.icon;
-                  const isActive = activeScreen === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveScreen(item.id)}
-                      title={sidebarCollapsed ? item.label : undefined}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold transition-all relative ${
-                        isActive 
-                          ? 'bg-brand-orange text-white shadow-md' 
-                          : 'hover:bg-slate-800 hover:text-white text-slate-400'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      {!sidebarCollapsed && <span>{item.label}</span>}
-                      {isActive && !sidebarCollapsed && (
-                        <span className="absolute right-2 w-1.5 h-1.5 bg-white rounded-full"></span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
-        </div>
-
-        {/* Collapse bottom toggle switch */}
-        <div className="p-3 border-t border-slate-800 flex justify-center">
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
-          >
-            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
-        </div>
-      </aside>
-
-      {/* 2. Topbar + Main Canvas Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Topbar */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-          {/* Breadcrumb path */}
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-            <span className="hover:text-slate-600 cursor-pointer">HUDDO ERP</span>
-            <span>/</span>
-            <span className="hover:text-slate-600 uppercase tracking-wider">{activeSection}</span>
-            <span>/</span>
-            <span className="text-slate-700 font-bold">{activeLabel}</span>
-          </div>
-
-          {/* Action links */}
-          <div className="flex items-center gap-4">
-            {/* Search Launcher */}
-            <button 
-              onClick={() => setIsSearchOpen(true)}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/80 hover:border-slate-300 hover:bg-slate-100/50 rounded-lg text-slate-400 text-xs font-semibold w-56 transition-all"
-            >
-              <Search className="w-3.5 h-3.5 shrink-0" />
-              <span>Search Module (Ctrl+K)</span>
-            </button>
-
-            {/* Notification Bell Badge */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsNotifOpen(!isNotifOpen)}
-                className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-all"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-brand-orange border-2 border-white rounded-full"></span>
-              </button>
-
-              {/* Notification feed dropdown */}
-              {isNotifOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-40 p-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
-                    <span className="text-xs font-bold text-slate-800 font-display">System Notifications</span>
-                    <button 
-                      onClick={() => { setIsNotifOpen(false); showToast("Marked all notifications as read.", "success"); }}
-                      className="text-[10px] text-brand-orange font-bold hover:underline"
-                    >
-                      Mark all read
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="text-xs">
-                      <span className="font-bold text-slate-800 block">Pending Shop Verification</span>
-                      <p className="text-slate-400 mt-0.5 font-medium">Apex Sole Distributors requested Silver category authorization in Pune.</p>
-                      <span className="text-[9px] text-slate-400 font-bold block mt-1">10 mins ago</span>
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-bold text-slate-800 block">Large Order Review Required</span>
-                      <p className="text-slate-400 mt-0.5 font-medium">Order ORD-5509 of value ₹1,50,000 exceeds standard limit limits.</p>
-                      <span className="text-[9px] text-slate-400 font-bold block mt-1">2 hours ago</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Profile Avatar drop */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="w-8 h-8 rounded-full border border-slate-200 overflow-hidden shadow-xs cursor-pointer"
-              >
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" alt="Admin user profile photo" className="w-full h-full object-cover" />
-              </button>
-
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-40 py-2">
-                  <div className="px-4 py-2 border-b border-slate-100 mb-1.5 bg-slate-50/50 rounded-t-xl">
-                    <span className="font-bold text-slate-800 block text-xs font-display">Rohan Hudda</span>
-                    <span className="text-[10px] text-brand-orange font-bold block">{currentRole} Session</span>
-                  </div>
-                  
-                  <div className="px-4 py-2 border-b border-slate-100 mb-1.5">
-                    <label className="block text-[8px] uppercase font-bold text-slate-400 mb-1">Select Active Role (RBAC)</label>
-                    <select
-                      value={currentRole}
-                      onChange={(e) => { handleRoleChange(e.target.value); setIsProfileOpen(false); }}
-                      className="w-full text-[10px] border border-slate-200 rounded p-1 bg-white font-bold text-slate-700 focus:outline-none"
-                    >
-                      <option value="Founder">Founder</option>
-                      <option value="CEO">CEO</option>
-                      <option value="Admin">Admin</option>
-                      <option value="Country Manager">Country Manager</option>
-                      <option value="State Manager">State Manager</option>
-                      <option value="City Manager">City Manager</option>
-                      <option value="Finance Manager">Finance Manager</option>
-                      <option value="Sales Executive">Sales Executive</option>
-                      <option value="Retailer">Retailer</option>
-                      <option value="Promoter">Promoter</option>
-                    </select>
-
-                  </div>
-                  
-                  <button 
-                    onClick={() => { setIsProfileOpen(false); showToast("Opened profile setups.", "success"); }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>My Profile</span>
-                  </button>
-                  <button 
-                    onClick={() => { setIsProfileOpen(false); showToast("Opened system configs.", "success"); }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>Portal Settings</span>
-                  </button>
-                  
-                  <div className="border-t border-slate-100 my-1"></div>
-                  
-                  <button 
-                    onClick={() => { setIsProfileOpen(false); showToast("Sign-out request dispatched.", "error"); }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
-                  >
-                    <LogOut className="w-3.5 h-3.5 font-bold" />
-                    <span>Logout Account</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-          </div>
-        </header>
-
-        {/* 3. Main Dashboard canvas */}
-        <main className="p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto">
-          <ActiveComponent onNavigate={(target) => setActiveScreen(target)} showToast={showToast} userRole={currentRole} />
-        </main>
-      </div>
-
-      {/* Global Command Palette search modal */}
-      {isSearchOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/60 backdrop-blur-xs p-4 pt-16 animate-fade-in"
-          onClick={(e) => e.target === e.currentTarget && setIsSearchOpen(false)}
-        >
-          <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-              <Search className="w-4 h-4 text-slate-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search command palette..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="text-sm border-0 focus:outline-none w-full bg-white text-slate-800"
-                autoFocus
-              />
-              <button 
-                onClick={() => setIsSearchOpen(false)}
-                className="p-1 hover:bg-slate-100 rounded text-slate-400"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="max-h-60 overflow-y-auto p-2">
-              {searchedItems.length > 0 ? (
-                searchedItems.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveScreen(item.id);
-                      setIsSearchOpen(false);
-                      setSearchQuery('');
-                    }}
-                    className="w-full text-left p-2.5 hover:bg-slate-50 rounded-lg text-xs font-bold flex items-center gap-2 text-slate-700 transition-colors"
-                  >
-                    <item.icon className="w-4 h-4 text-slate-400" />
-                    <span>Navigate to {item.label}</span>
-                  </button>
-                ))
-              ) : (
-                <div className="p-8 text-center text-slate-400 text-xs font-semibold">
-                  {searchQuery.trim() === '' ? "Type key concepts to search modules..." : "No modules found matches query."}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Global Success/Error toast */}
       {toast && (
         <Toast 
@@ -531,7 +424,6 @@ export default function App() {
           onClose={() => setToast(null)} 
         />
       )}
-
-    </div>
+    </DashboardLayout>
   );
 }

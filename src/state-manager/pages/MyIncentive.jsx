@@ -147,7 +147,7 @@ export default function MyIncentive({
         <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Monthly Incentive Earned — Last 12 Months</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={derivedHistory} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+            <BarChart data={derivedHistory} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="month" stroke="#94a3b8" fontSize={9} tickLine={false} />
               <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(val) => `₹${val/1000}K`} />

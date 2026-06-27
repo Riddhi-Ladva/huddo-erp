@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GitBranch, MapPin, Award, User, Layers, Plus, ExternalLink, ShieldAlert } from 'lucide-react';
-import { GEOGRAPHY, STANDARD_ROLES } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 
-export default function Hierarchy({ showToast }) {
+export default function Hierarchy({ showToast, userRole }) {
   const [activeTab, setActiveTab] = useState('tree'); // tree | countries | states | cities
-  const [countries, setCountries] = useState(GEOGRAPHY.countries);
-  const [states, setStates] = useState(GEOGRAPHY.states);
-  const [cities, setCities] = useState(GEOGRAPHY.cities);
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [employees, setEmployees] = useState([]);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -18,17 +18,91 @@ export default function Hierarchy({ showToast }) {
   const [assignTarget, setAssignTarget] = useState(null); // { type, name, currentManager }
   const [assignedManagerName, setAssignedManagerName] = useState('');
 
+  // Edit Modals state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState(null); // { id, type, name, manager }
+  const [editFormData, setEditFormData] = useState({ name: '', manager: '' });
+
   // Node expand state in the visual tree
   const [expandedNodes, setExpandedNodes] = useState({ founder: true, country: true, state: true });
 
-  // HUDDO-UPDATE: Hierarchy — CEO state
+  // CEO state
   const [ceoManager, setCeoManager] = useState("Karan Devani");
 
   // State / City revenues loaded from GET API endpoints
   const [stateRevenues, setStateRevenues] = useState({});
   const [cityRevenues, setCityRevenues] = useState({});
 
-  React.useEffect(() => {
+  const loadHierarchy = () => {
+    fetch('/api/countries')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setCountries(resData.data.map(c => ({
+            id: c._id,
+            name: c.name,
+            manager: c.manager?.full_name || c.manager?.name || (typeof c.manager === 'string' ? c.manager : 'Rajesh Sharma'),
+            managerId: c.manager?._id || c.manager,
+            statesCount: c.statesCount || 0,
+            retailersCount: c.retailersCount || 0,
+            revenue: c.revenue || 0
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading countries:", err));
+
+    fetch('/api/states')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setStates(resData.data.map(s => ({
+            id: s._id,
+            name: s.name,
+            country: s.country?.name || (typeof s.country === 'string' ? s.country : 'India'),
+            countryId: s.country?._id || s.country,
+            manager: s.manager?.full_name || s.manager?.name || (typeof s.manager === 'string' ? s.manager : 'Preeti Verma'),
+            managerId: s.manager?._id || s.manager,
+            citiesCount: s.citiesCount || 0,
+            retailersCount: s.retailersCount || 0,
+            revenue: s.revenue || 0
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading states:", err));
+
+    fetch('/api/cities')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setCities(resData.data.map(ct => ({
+            id: ct._id,
+            name: ct.name,
+            state: ct.state?.name || (typeof ct.state === 'string' ? ct.state : 'Maharashtra'),
+            stateId: ct.state?._id || ct.state,
+            manager: ct.manager?.full_name || ct.manager?.name || (typeof ct.manager === 'string' ? ct.manager : 'Sanjay Joshi'),
+            managerId: ct.manager?._id || ct.manager,
+            retailersCount: ct.retailersCount || 0,
+            revenue: ct.revenue || 0
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading cities:", err));
+  };
+
+  useEffect(() => {
+    loadHierarchy();
+
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setEmployees(resData.data);
+        }
+      })
+      .catch(err => console.error("Error loading employees:", err));
+  }, []);
+
+  useEffect(() => {
     // Fetch state revenues
     states.forEach(st => {
       fetch(`/api/hierarchy/state/${st.id}/revenue`)
@@ -52,69 +126,118 @@ export default function Hierarchy({ showToast }) {
 
   const handleAddSubmit = (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.manager) {
-      showToast("Please complete the form.", "error");
+    if (!formData.name) {
+      showToast("Please enter a name.", "error");
       return;
     }
 
-    if (addType === 'Country') {
-      const newCountry = {
-        id: `C${countries.length + 1}`,
-        name: formData.name,
-        manager: formData.manager,
-        statesCount: 0,
-        retailersCount: 0,
-        revenue: 0
-      };
-      setCountries([...countries, newCountry]);
-    } else if (addType === 'State') {
-      const newState = {
-        id: `S${states.length + 1}`,
-        name: formData.name,
-        country: formData.countryName || 'India',
-        manager: formData.manager,
-        citiesCount: 0,
-        retailersCount: 0,
-        revenue: 0
-      };
-      setStates([...states, newState]);
-      // increment parent country states count
-      setCountries(countries.map(c => c.name === (formData.countryName || 'India') ? { ...c, statesCount: c.statesCount + 1 } : c));
-    } else if (addType === 'City') {
-      const newCity = {
-        id: `CT${cities.length + 1}`,
-        name: formData.name,
-        state: formData.stateName || 'Maharashtra',
-        manager: formData.manager,
-        retailersCount: 0,
-        revenue: 0
-      };
-      setCities([...cities, newCity]);
-      // increment state cities count
-      setStates(states.map(s => s.name === (formData.stateName || 'Maharashtra') ? { ...s, citiesCount: s.citiesCount + 1 } : s));
-    }
+    const selectedManagerObj = employees.find(emp => (emp.full_name || emp.name) === formData.manager) || employees[0];
+    const managerId = selectedManagerObj?._id || null;
 
-    setIsAddOpen(false);
-    setFormData({ name: '', manager: '', parent: '', stateName: '', countryName: '' });
-    showToast(`${addType} added to organizational database.`, "success");
+    if (addType === 'Country') {
+      const payload = { name: formData.name, manager: managerId };
+      fetch('/api/countries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(res => res.json())
+        .then(resData => {
+          if (resData.success) {
+            showToast("Country added successfully.", "success");
+            loadHierarchy();
+            setIsAddOpen(false);
+            setFormData({ name: '', manager: '', parent: '', stateName: '', countryName: '' });
+          } else {
+            showToast(resData.message || "Error adding country.", "error");
+          }
+        })
+        .catch(err => console.error(err));
+    } else if (addType === 'State') {
+      const parentCountryObj = countries.find(c => c.name === formData.countryName) || countries[0];
+      if (!parentCountryObj) {
+        showToast("Please select a valid Country first.", "error");
+        return;
+      }
+      const payload = { name: formData.name, country: parentCountryObj.id, manager: managerId };
+      fetch('/api/states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(res => res.json())
+        .then(resData => {
+          if (resData.success) {
+            showToast("State added successfully.", "success");
+            loadHierarchy();
+            setIsAddOpen(false);
+            setFormData({ name: '', manager: '', parent: '', stateName: '', countryName: '' });
+          } else {
+            showToast(resData.message || "Error adding state.", "error");
+          }
+        })
+        .catch(err => console.error(err));
+    } else if (addType === 'City') {
+      const parentStateObj = states.find(s => s.name === formData.stateName) || states[0];
+      if (!parentStateObj) {
+        showToast("Please select a valid State first.", "error");
+        return;
+      }
+      const payload = { name: formData.name, state: parentStateObj.id, manager: managerId };
+      fetch('/api/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(res => res.json())
+        .then(resData => {
+          if (resData.success) {
+            showToast("City added successfully.", "success");
+            loadHierarchy();
+            setIsAddOpen(false);
+            setFormData({ name: '', manager: '', parent: '', stateName: '', countryName: '' });
+          } else {
+            showToast(resData.message || "Error adding city.", "error");
+          }
+        })
+        .catch(err => console.error(err));
+    }
   };
 
   const handleAssignManager = (e) => {
     e.preventDefault();
     if (!assignedManagerName) return;
 
+    const selectedManagerObj = employees.find(emp => (emp.full_name || emp.name) === assignedManagerName);
+    const managerId = selectedManagerObj?._id || null;
+
     if (assignTarget.type === 'CEO') {
       setCeoManager(assignedManagerName);
-    } else if (assignTarget.type === 'Country') {
-      setCountries(countries.map(c => c.id === assignTarget.id ? { ...c, manager: assignedManagerName } : c));
-    } else if (assignTarget.type === 'State') {
-      setStates(states.map(s => s.id === assignTarget.id ? { ...s, manager: assignedManagerName } : s));
-    } else if (assignTarget.type === 'City') {
-      setCities(cities.map(ct => ct.id === assignTarget.id ? { ...ct, manager: assignedManagerName } : ct));
-    }
+      setIsAssignOpen(false);
+      showToast(`Assigned ${assignedManagerName} as CEO.`, "success");
+    } else {
+      let endpoint = '';
+      if (assignTarget.type === 'Country') endpoint = `/api/countries/${assignTarget.id}`;
+      else if (assignTarget.type === 'State') endpoint = `/api/states/${assignTarget.id}`;
+      else if (assignTarget.type === 'City') endpoint = `/api/cities/${assignTarget.id}`;
 
-    setIsAssignOpen(false);
-    showToast(`Assigned ${assignedManagerName} as ${assignTarget.type} Manager.`, "success");
+      fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manager: managerId })
+      })
+        .then(res => res.json())
+        .then(resData => {
+          if (resData.success) {
+            showToast(`Assigned ${assignedManagerName} as ${assignTarget.type} Manager.`, "success");
+            loadHierarchy();
+            setIsAssignOpen(false);
+          } else {
+            showToast(resData.message || "Assignment failed.", "error");
+          }
+        })
+        .catch(err => console.error(err));
+    }
   };
 
   const triggerAssign = (row, type) => {
@@ -123,17 +246,56 @@ export default function Hierarchy({ showToast }) {
     setIsAssignOpen(true);
   };
 
+  const triggerEdit = (row, type) => {
+    setEditTarget({ id: row.id, type, name: row.name, manager: row.manager });
+    setEditFormData({ name: row.name, manager: row.manager });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editFormData.name) {
+      showToast("Please complete the form.", "error");
+      return;
+    }
+
+    const selectedManagerObj = employees.find(emp => (emp.full_name || emp.name) === editFormData.manager);
+    const managerId = selectedManagerObj?._id || null;
+
+    let endpoint = '';
+    if (editTarget.type === 'Country') endpoint = `/api/countries/${editTarget.id}`;
+    else if (editTarget.type === 'State') endpoint = `/api/states/${editTarget.id}`;
+    else if (editTarget.type === 'City') endpoint = `/api/cities/${editTarget.id}`;
+
+    fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editFormData.name, manager: managerId })
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`${editTarget.type} updated successfully.`, "success");
+          loadHierarchy();
+          setIsEditOpen(false);
+        } else {
+          showToast(resData.message || "Failed to update.", "error");
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
   // Define Columns
   const countryColumns = [
     { header: "Country", accessor: "name", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
     { header: "Country Manager", accessor: "manager", render: (val) => <span className="font-medium text-slate-700 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" />{val}</span> },
     { header: "Total States", accessor: "statesCount" },
     { header: "Mapped Retailers", accessor: "retailersCount" },
-    { header: "Annual Revenue", accessor: "revenue", render: (val) => <span className="font-bold text-slate-900">₹{val.toLocaleString('en-IN')}</span> },
+    ...(userRole === 'CEO' ? [] : [{ header: "Annual Revenue", accessor: "revenue", render: (val) => <span className="font-bold text-slate-900">₹{val.toLocaleString('en-IN')}</span> }]),
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <div className="flex gap-2">
         <button onClick={() => triggerAssign(row, 'Country')} className="text-xs font-bold text-brand-orange hover:underline">Assign Manager</button>
-        <button onClick={() => showToast(`Editing details for ${row.name}`, "success")} className="text-xs font-bold text-slate-500 hover:underline">Edit</button>
+        <button onClick={() => triggerEdit(row, 'Country')} className="text-xs font-bold text-slate-500 hover:underline">Edit</button>
       </div>
     )}
   ];
@@ -144,8 +306,7 @@ export default function Hierarchy({ showToast }) {
     { header: "State Manager", accessor: "manager", render: (val) => <span className="font-medium text-slate-700 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" />{val}</span> },
     { header: "Total Cities", accessor: "citiesCount" },
     { header: "Retailers", accessor: "retailersCount" },
-    // HUDDO-UPDATE: Hierarchy — State Revenue Column from aggregated billing data
-    { 
+    ...(userRole === 'CEO' ? [] : [{ 
       header: "Revenue", 
       accessor: "id", 
       render: (val, row) => {
@@ -153,14 +314,14 @@ export default function Hierarchy({ showToast }) {
         return rev !== undefined ? (
           <span className="font-bold text-slate-900">₹{rev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         ) : (
-          <span className="text-slate-400 font-medium">—</span> // HUDDO-TODO: Verify data join for state revenue aggregation
+          <span className="text-slate-400 font-medium">—</span>
         );
       } 
-    },
+    }]),
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <div className="flex gap-2">
         <button onClick={() => triggerAssign(row, 'State')} className="text-xs font-bold text-brand-orange hover:underline">Assign Manager</button>
-        <button onClick={() => showToast(`Editing state ${row.name}`, "success")} className="text-xs font-bold text-slate-500 hover:underline">Edit</button>
+        <button onClick={() => triggerEdit(row, 'State')} className="text-xs font-bold text-slate-500 hover:underline">Edit</button>
       </div>
     )}
   ];
@@ -170,8 +331,7 @@ export default function Hierarchy({ showToast }) {
     { header: "State Region", accessor: "state" },
     { header: "City Manager", accessor: "manager", render: (val) => <span className="font-medium text-slate-700 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" />{val}</span> },
     { header: "Retailers", accessor: "retailersCount" },
-    // HUDDO-UPDATE: Hierarchy — City Revenue Column from aggregated billing data
-    { 
+    ...(userRole === 'CEO' ? [] : [{ 
       header: "Revenue", 
       accessor: "id", 
       render: (val, row) => {
@@ -179,14 +339,14 @@ export default function Hierarchy({ showToast }) {
         return rev !== undefined ? (
           <span className="font-bold text-slate-900">₹{rev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         ) : (
-          <span className="text-slate-400 font-medium">—</span> // HUDDO-TODO: Verify data join for city revenue aggregation
+          <span className="text-slate-400 font-medium">—</span>
         );
       } 
-    },
+    }]),
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <div className="flex gap-2">
         <button onClick={() => triggerAssign(row, 'City')} className="text-xs font-bold text-brand-orange hover:underline">Assign Manager</button>
-        <button onClick={() => showToast(`Editing city ${row.name}`, "success")} className="text-xs font-bold text-slate-500 hover:underline">Edit</button>
+        <button onClick={() => triggerEdit(row, 'City')} className="text-xs font-bold text-slate-500 hover:underline">Edit</button>
       </div>
     )}
   ];
@@ -197,7 +357,7 @@ export default function Hierarchy({ showToast }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 font-display">Organizational Hierarchy</h1>
-          <p className="text-sm text-slate-500">Configure distribution tiers, map territorial layers, and delegate managerial coverage controls.</p>
+          <p className="text-sm text-slate-500">Configure distribution tiers, map geographic layers, and delegate managerial coverage controls.</p>
         </div>
         
         {activeTab !== 'tree' && (
@@ -215,7 +375,7 @@ export default function Hierarchy({ showToast }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveTab('tree')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'tree' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -258,7 +418,7 @@ export default function Hierarchy({ showToast }) {
               <div className="w-0.5 h-6 bg-slate-300"></div>
             </div>
 
-            {/* HUDDO-UPDATE: Hierarchy — CEO level added */}
+            {/* CEO */}
             <div className="flex flex-col items-center w-full">
               <div className="bg-slate-800 text-white px-6 py-3 rounded-lg border border-slate-700 shadow-md text-center relative group w-64">
                 <span className="text-[9px] uppercase font-bold text-emerald-400">CEO</span>
@@ -278,33 +438,72 @@ export default function Hierarchy({ showToast }) {
             <div className="flex flex-col items-center w-full">
               <div className="bg-slate-900 text-white px-6 py-3 rounded-lg border border-slate-700 shadow-md text-center relative group w-64">
                 <span className="text-[9px] uppercase font-bold text-blue-400">Country Manager (India)</span>
-                {/* HUDDO-UPDATE: Hierarchy — Apply custom v2 font sizing to Country Manager */}
                 <h4 className="font-bold font-display mt-0.5 huddo-v2-country-node-label">{countries[0]?.manager || "Rajesh Sharma"}</h4>
-                <p className="text-[10px] text-slate-400">Coverage: 5 Active States</p>
+                <p className="text-[10px] text-slate-400">Coverage: {states.length} Active States</p>
+                <div className="hidden group-hover:flex gap-1 absolute right-2 top-2">
+                  <button 
+                    onClick={() => triggerAssign(countries[0] || { id: 'C1', name: 'India', manager: countries[0]?.manager || 'Rajesh Sharma' }, 'Country')} 
+                    className="text-[9px] bg-brand-orange text-white px-1.5 py-0.5 rounded font-bold hover:bg-brand-orange-hover transition-colors"
+                  >
+                    Assign
+                  </button>
+                  <button 
+                    onClick={() => triggerEdit(countries[0] || { id: 'C1', name: 'India', manager: countries[0]?.manager || 'Rajesh Sharma' }, 'Country')} 
+                    className="text-[9px] bg-slate-700 text-white px-1.5 py-0.5 rounded font-bold hover:bg-slate-600 transition-colors"
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
               <div className="w-0.5 h-6 bg-slate-300"></div>
             </div>
 
             {/* STATE MANAGERS (Multiple Nodes Grid) */}
-            <div className="grid grid-cols-2 gap-4 w-full justify-items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full justify-items-center">
               {states.slice(0, 2).map((st, i) => (
                 <div key={st.id} className="flex flex-col items-center w-full">
-                  <div className="bg-white border border-slate-200 p-4 rounded-lg shadow-sm w-full text-center relative">
+                  <div className="bg-white border border-slate-200 p-4 rounded-lg shadow-sm w-full text-center relative group">
                     <span className="text-[9px] uppercase font-bold text-slate-500">State Manager ({st.name})</span>
-                    {/* HUDDO-UPDATE: Hierarchy — Apply custom v2 font sizing to State Manager */}
                     <h4 className="font-bold text-slate-800 font-display mt-0.5 huddo-v2-state-node-label">{st.manager}</h4>
                     <p className="text-[10px] text-slate-400">{st.citiesCount} Cities Managed</p>
+                    <div className="hidden group-hover:flex gap-1 absolute right-2 top-2">
+                      <button 
+                        onClick={() => triggerAssign(st, 'State')} 
+                        className="text-[9px] bg-brand-orange text-white px-1.5 py-0.5 rounded font-bold hover:bg-brand-orange-hover transition-colors"
+                      >
+                        Assign
+                      </button>
+                      <button 
+                        onClick={() => triggerEdit(st, 'State')} 
+                        className="text-[9px] bg-slate-700 text-white px-1.5 py-0.5 rounded font-bold hover:bg-slate-600 transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
                   <div className="w-0.5 h-6 bg-slate-300"></div>
 
                   {/* CITY MANAGERS (Level down mapped to state) */}
                   <div className="space-y-3 w-4/5">
                     {cities.filter(ct => ct.state === st.name).slice(0, 1).map(ct => (
-                      <div key={ct.id} className="bg-orange-50/50 border border-orange-200 p-3 rounded-lg text-center">
+                      <div key={ct.id} className="bg-orange-50/50 border border-orange-200 p-3 rounded-lg text-center relative group">
                         <span className="text-[8px] uppercase font-bold text-brand-orange">City Manager ({ct.name})</span>
-                        {/* HUDDO-UPDATE: Hierarchy — Apply custom v2 font sizing to City Manager */}
                         <h5 className="font-bold text-slate-800 font-display mt-0.5 huddo-v2-city-node-label">{ct.manager}</h5>
-                        <p className="text-[9px] text-slate-500">8 Retailer Mapped</p>
+                        <p className="text-[9px] text-slate-500">{ct.retailersCount || 0} Retailers Mapped</p>
+                        <div className="hidden group-hover:flex gap-1 absolute right-2 top-2">
+                          <button 
+                            onClick={() => triggerAssign(ct, 'City')} 
+                            className="text-[8px] bg-brand-orange text-white px-1.5 py-0.5 rounded font-bold hover:bg-brand-orange-hover transition-colors"
+                          >
+                            Assign
+                          </button>
+                          <button 
+                            onClick={() => triggerEdit(ct, 'City')} 
+                            className="text-[8px] bg-slate-700 text-white px-1.5 py-0.5 rounded font-bold hover:bg-slate-600 transition-colors"
+                          >
+                            Edit
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -344,7 +543,7 @@ export default function Hierarchy({ showToast }) {
         title={`Add New ${addType}`}
         onConfirm={handleAddSubmit}
       >
-        <form className="space-y-4">
+        <form className="space-y-4 text-left">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{addType} Name</label>
             <input 
@@ -386,13 +585,16 @@ export default function Hierarchy({ showToast }) {
 
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assign {addType} Manager</label>
-            <input 
-              type="text" 
-              placeholder="e.g., Devendra Singh"
+            <select 
               value={formData.manager}
               onChange={(e) => setFormData({...formData, manager: e.target.value})}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            />
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white"
+            >
+              <option value="">Select Manager...</option>
+              {employees.map(emp => (
+                <option key={emp._id} value={emp.full_name || emp.name}>{emp.full_name || emp.name}</option>
+              ))}
+            </select>
           </div>
         </form>
       </Modal>
@@ -404,21 +606,58 @@ export default function Hierarchy({ showToast }) {
         title={`Assign Manager to ${assignTarget?.name}`}
         onConfirm={handleAssignManager}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 text-left">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2.5 text-xs text-amber-800">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>Updating the assigned manager transfers control privileges for that territory immediately. Please confirm details.</p>
+            <p>Updating the assigned manager transfers control privileges for that region immediately. Please confirm details.</p>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Manager Name</label>
-            <input 
-              type="text" 
+            <select 
               value={assignedManagerName}
               onChange={(e) => setAssignedManagerName(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            />
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white"
+            >
+              <option value="">Select Manager...</option>
+              {employees.map(emp => (
+                <option key={emp._id} value={emp.full_name || emp.name}>{emp.full_name || emp.name}</option>
+              ))}
+            </select>
           </div>
         </div>
+      </Modal>
+
+      {/* Edit Geo Level Modal */}
+      <Modal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        title={`Edit ${editTarget?.type}: ${editTarget?.name}`}
+        onConfirm={handleEditSubmit}
+      >
+        <form className="space-y-4 text-left">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{editTarget?.type} Name</label>
+            <input 
+              type="text" 
+              value={editFormData.name}
+              onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assigned Manager</label>
+            <select 
+              value={editFormData.manager}
+              onChange={(e) => setEditFormData({...editFormData, manager: e.target.value})}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white"
+            >
+              <option value="">Select Manager...</option>
+              {employees.map(emp => (
+                <option key={emp._id} value={emp.full_name || emp.name}>{emp.full_name || emp.name}</option>
+              ))}
+            </select>
+          </div>
+        </form>
       </Modal>
 
     </div>

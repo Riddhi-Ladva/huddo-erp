@@ -3,8 +3,9 @@ import { FileText, Download, Filter, BarChart, Calendar, ChevronRight } from 'lu
 import { DataTable } from '../components/Common';
 import { ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Cell } from 'recharts';
 
-export default function Reports({ showToast }) {
-  const [selectedReportType, setSelectedReportType] = useState('sales'); // sales | revenue | commission | retailer | employee | team | product | territory
+export default function Reports({ showToast, userRole }) {
+  const isCeo = userRole === 'CEO';
+  const [selectedReportType, setSelectedReportType] = useState(isCeo ? 'employee' : 'sales'); // sales | revenue | commission | retailer | employee | team | product
   const [dateFilter, setDateFilter] = useState('2026-06-08');
 
   // Sales report mock data
@@ -23,16 +24,36 @@ export default function Reports({ showToast }) {
     { name: 'Huddo Leather Loafer', category: 'Casual Shoes', sold: 150, revenue: 524850 }
   ];
 
-  // Territory report mock data
-  const territoryReportData = [
-    { name: 'Maharashtra', retailers: 15, growth: 12.5, revenue: 4500000 },
-    { name: 'Delhi NCR', retailers: 10, growth: 8.2, revenue: 3200000 },
-    { name: 'Karnataka', retailers: 9, growth: 5.4, revenue: 2100000 },
-    { name: 'Gujarat', retailers: 8, growth: 14.1, revenue: 1650000 }
-  ];
+
 
   const handleExport = (format) => {
-    showToast(`Exporting ${selectedReportType.toUpperCase()} Report to ${format.toUpperCase()} format...`, "success");
+    let filename = `huddo_${selectedReportType}_report_${Date.now()}.${format}`;
+    let csvContent = "";
+    
+    if (selectedReportType === 'sales') {
+      csvContent = "Product Name,Category,Units Sold,Revenue\n" + 
+        salesReportData.map(item => `"${item.name}","Sports Shoes",${item.sold},${item.amount}`).join("\n");
+    } else {
+      csvContent = "Report Type,Generated At,Format\n" + 
+        `"${selectedReportType}","${new Date().toISOString()}","${format}"`;
+    }
+    
+    const blobType = format === 'pdf' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+    const finalContent = format === 'pdf' 
+      ? `--- HUDDO SHOES ERP REPORT ---\nReport: ${selectedReportType.toUpperCase()}\nDate: ${new Date().toLocaleDateString()}\n\n${csvContent}` 
+      : csvContent;
+    
+    const blob = new Blob([finalContent], { type: blobType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast(`Successfully downloaded ${selectedReportType.toUpperCase()} report as ${format.toUpperCase()}.`, "success");
   };
 
   return (
@@ -50,9 +71,8 @@ export default function Reports({ showToast }) {
             { id: 'retailer', label: 'Retailer Rankings' },
             { id: 'employee', label: 'Employee Performance' },
             { id: 'team', label: 'Team Progress' },
-            { id: 'product', label: 'Product Catalog Metrics' },
-            { id: 'territory', label: 'Territory Revenue' }
-          ].map(rpt => (
+            { id: 'product', label: 'Product Catalog Metrics' }
+          ].filter(rpt => !isCeo || !['sales', 'revenue', 'commission', 'retailer'].includes(rpt.id)).map(rpt => (
             <button
               key={rpt.id}
               onClick={() => setSelectedReportType(rpt.id)}
@@ -70,8 +90,14 @@ export default function Reports({ showToast }) {
 
         {/* Main report output canvas */}
         <div className="lg:col-span-3 space-y-6">
-          {/* Header Controls */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          {isCeo && ['sales', 'revenue', 'commission', 'retailer'].includes(selectedReportType) ? (
+            <div className="p-8 text-center text-rose-600 font-bold bg-white border border-slate-200 rounded-xl shadow-xs">
+              Access Denied: CEO has no access to financial reports.
+            </div>
+          ) : (
+            <>
+              {/* Header Controls */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-slate-400 shrink-0" />
               <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="text-xs border border-slate-200 rounded p-1.5 focus:outline-none bg-white font-semibold" />
@@ -112,26 +138,14 @@ export default function Reports({ showToast }) {
                   <RechartsBarChart data={productReportData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" />
-                    <YAxis fontSize={10} stroke="#94a3b8" tickFormatter={(val) => `₹${val / 1000}K`} />
-                    <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
-                    <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Accrued Revenue (₹)" />
+                    <YAxis fontSize={10} stroke="#94a3b8" tickFormatter={isCeo ? (val) => val : (val) => `₹${val / 1000}K`} />
+                    <Tooltip formatter={isCeo ? (value) => value : (value) => `₹${value.toLocaleString('en-IN')}`} />
+                    <Bar dataKey={isCeo ? "sold" : "revenue"} fill="#3b82f6" radius={[4, 4, 0, 0]} name={isCeo ? "Total Pairs Sold" : "Accrued Revenue (₹)"} />
                   </RechartsBarChart>
                 </ResponsiveContainer>
               )}
 
-              {selectedReportType === 'territory' && (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={territoryReportData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" />
-                    <YAxis fontSize={10} stroke="#94a3b8" tickFormatter={(val) => `₹${val / 100000}L`} />
-                    <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
-                    <Line type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2.5} name="Total Sales (₹)" />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-
-              {!['sales', 'product', 'territory'].includes(selectedReportType) && (
+              {!['sales', 'product'].includes(selectedReportType) && (
                 <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
                   <span className="text-xs font-semibold text-slate-400">Loading custom visualizer matrix...</span>
                 </div>
@@ -173,7 +187,7 @@ export default function Reports({ showToast }) {
                     <th className="px-6 py-3">Model Name</th>
                     <th className="px-6 py-3">Category</th>
                     <th className="px-6 py-3 text-right">Total Pairs Sold</th>
-                    <th className="px-6 py-3 text-right">Total Net Revenue</th>
+                    {!isCeo && <th className="px-6 py-3 text-right">Total Net Revenue</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -182,43 +196,21 @@ export default function Reports({ showToast }) {
                       <td className="px-6 py-3.5 text-slate-900 font-bold">{row.name}</td>
                       <td className="px-6 py-3.5 text-slate-400">{row.category}</td>
                       <td className="px-6 py-3.5 text-right text-slate-600">{row.sold} pairs</td>
-                      <td className="px-6 py-3.5 text-right text-slate-900 font-bold">₹{row.revenue.toLocaleString('en-IN')}</td>
+                      {!isCeo && <td className="px-6 py-3.5 text-right text-slate-900 font-bold">₹{row.revenue.toLocaleString('en-IN')}</td>}
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
 
-            {selectedReportType === 'territory' && (
-              <table className="w-full text-left text-xs font-semibold text-slate-700">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
-                  <tr>
-                    <th className="px-6 py-3">Territory</th>
-                    <th className="px-6 py-3 text-right">Mapped Shops</th>
-                    <th className="px-6 py-3 text-right">Growth Rate</th>
-                    <th className="px-6 py-3 text-right">Revenue Generated</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {territoryReportData.map((row, idx) => (
-                    <tr key={idx}>
-                      <td className="px-6 py-3.5 text-slate-900 font-bold">{row.name}</td>
-                      <td className="px-6 py-3.5 text-right text-slate-600">{row.retailers} outlets</td>
-                      <td className="px-6 py-3.5 text-right text-emerald-600 font-bold">+{row.growth}%</td>
-                      <td className="px-6 py-3.5 text-right text-slate-900 font-bold">₹{row.revenue.toLocaleString('en-IN')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {!['sales', 'product', 'territory'].includes(selectedReportType) && (
+            {!['sales', 'product'].includes(selectedReportType) && (
               <div className="p-8 text-center text-slate-400 font-semibold">
-                <span>Select Sales, Product, or Territory reports to view active ledger metrics.</span>
+                <span>Select Sales or Product reports to view active ledger metrics.</span>
               </div>
             )}
           </div>
-
+          </>
+          )}
         </div>
       </div>
     </div>

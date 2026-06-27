@@ -147,7 +147,7 @@ export default function Targets() {
           <div>
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 font-display flex items-center gap-2">
               <Map className="w-4 h-4 text-slate-400" />
-              Territory Expansion Log
+              Market Expansion Log
             </h3>
             
             <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl">

@@ -134,7 +134,7 @@ export default function Leads({
 
       {/* Toggle mode bar */}
       <div className="p-3 bg-white border border-slate-200/60 rounded-2xl shadow-sm flex items-center justify-between">
-        <span className="text-[10px] text-slate-450 font-bold uppercase">Territory Scope: Ahmedabad</span>
+        <span className="text-[10px] text-slate-450 font-bold uppercase">City Scope: Ahmedabad</span>
         
         <div className="flex border border-slate-200 rounded-xl overflow-hidden">
           <button 

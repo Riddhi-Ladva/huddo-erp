@@ -36,7 +36,7 @@ export default function Promoters({ showToast }) {
   // New Promoter Form
   const [formData, setFormData] = useState({
     name: '', mobile: '', email: '', address: '', aadhaar: '', pan: '', gst: '',
-    bankName: '', accountNo: '', ifsc: '', territories: []
+    bankName: '', accountNo: '', ifsc: '', cities: []
   });
 
   const handleAddSubmit = (e) => {
@@ -52,7 +52,7 @@ export default function Promoters({ showToast }) {
       name: formData.name,
       code: codeId,
       mobile: formData.mobile,
-      territory: formData.territories.length > 0 ? formData.territories : ["Mumbai"],
+      cities: formData.cities.length > 0 ? formData.cities : ["Mumbai"],
       retailersAdded: 0,
       revenue: 0,
       royaltyEarned: 0,
@@ -65,7 +65,7 @@ export default function Promoters({ showToast }) {
     setIsAddOpen(false);
     setFormData({
       name: '', mobile: '', email: '', address: '', aadhaar: '', pan: '', gst: '',
-      bankName: '', accountNo: '', ifsc: '', territories: []
+      bankName: '', accountNo: '', ifsc: '', cities: []
     });
     showToast(`Promoter "${newPromoter.name}" registered under code: ${codeId}.`, "success");
   };
@@ -80,22 +80,19 @@ export default function Promoters({ showToast }) {
     showToast("Royalty percentages updated and propagated globally.", "success");
   };
 
-  const toggleTerritoryOption = (name) => {
-    if (formData.territories.includes(name)) {
-      setFormData({ ...formData, territories: formData.territories.filter(t => t !== name) });
+  const toggleCityOption = (name) => {
+    if (formData.cities.includes(name)) {
+      setFormData({ ...formData, cities: formData.cities.filter(t => t !== name) });
     } else {
-      setFormData({ ...formData, territories: [...formData.territories, name] });
+      setFormData({ ...formData, cities: [...formData.cities, name] });
     }
   };
-
-  const showTerritory = false; // HUDDO-UPDATE: Promoters — Allocated Territory hidden per client request. Data preserved in DB. Re-enable by removing this condition.
 
   // Promoter Table Columns
   const columns = [
     { header: "Name", accessor: "name", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
     { header: "Code ID", accessor: "code", render: (val) => <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold text-[11px]">{val}</code> },
     { header: "Mobile", accessor: "mobile" },
-    ...(showTerritory ? [{ header: "Allocated Territory", accessor: "territory", render: (val) => <span className="font-semibold text-slate-500">{val.join(", ")}</span> }] : []),
     { header: "Retailers Mapped", accessor: "retailersAdded", render: (val) => <span className="font-bold text-slate-700">{val} shops</span> },
     { header: "Revenue (₹)", accessor: "revenue", render: (val) => <span className="font-bold text-slate-900">₹{val.toLocaleString('en-IN')}</span> },
     // HUDDO-UPDATE: Promoters — Earned Royalty label updated to show 5%
@@ -165,7 +162,7 @@ export default function Promoters({ showToast }) {
       </div>
 
       {/* HUDDO-UPDATE: Promoters — Paid/Unpaid payment status filter */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         {['All', 'Paid', 'Unpaid'].map(status => (
           <button
             key={status}
@@ -203,7 +200,7 @@ export default function Promoters({ showToast }) {
           </button>
         </div>
 
-        <div className="border border-slate-100 rounded-lg overflow-hidden">
+        <div className="border border-slate-100 rounded-lg overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -276,31 +273,7 @@ export default function Promoters({ showToast }) {
             </div>
           </div>
 
-          {/* HUDDO-UPDATE: Promoters — Allocated Territory hidden per client request. Data preserved in DB. Re-enable by removing this condition. */}
-          {showTerritory && (
-            <div className="border-t border-slate-100 pt-3">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Territory Mapping Allocation</label>
-              <div className="flex flex-wrap gap-2">
-                {["Mumbai", "Pune", "New Delhi", "Bengaluru", "Ahmedabad"].map(city => {
-                  const isSelected = formData.territories.includes(city);
-                  return (
-                    <button
-                      key={city}
-                      type="button"
-                      onClick={() => toggleTerritoryOption(city)}
-                      className={`px-3 py-1 text-xs rounded-full border transition-all ${
-                        isSelected 
-                          ? 'bg-orange-50 border-brand-orange text-brand-orange font-bold' 
-                          : 'bg-white border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {city}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+
 
           <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
             <div>
@@ -375,7 +348,7 @@ export default function Promoters({ showToast }) {
                     <h4 className="text-xs font-bold text-slate-500 uppercase">Monthly Royalty Accrual History (₹)</h4>
                     <div className="h-48">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={mockRoyaltyTrend} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                        <BarChart data={mockRoyaltyTrend} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                           <XAxis dataKey="month" fontSize={10} stroke="#94a3b8" />
                           <YAxis fontSize={10} stroke="#94a3b8" />
@@ -389,7 +362,7 @@ export default function Promoters({ showToast }) {
                   {/* Mapped retailers table preview */}
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-slate-500 uppercase">Mapped Retailers & Outlets</h4>
-                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div className="border border-slate-200 rounded-lg overflow-x-auto">
                       <table className="w-full text-left text-xs">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -423,7 +396,7 @@ export default function Promoters({ showToast }) {
                   <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
                     Company-to-Retailer Billing Chain
                   </h4>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="border border-slate-200 rounded-lg overflow-x-auto">
                     <table className="w-full text-left text-xs font-semibold text-slate-700">
                       <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                         <tr>

@@ -5,7 +5,43 @@ import { DataTable, Modal } from '../components/Common';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export default function Retailers({ showToast }) {
-  const [retailers, setRetailers] = useState(initialRetailers);
+  const [retailers, setRetailers] = useState([]);
+
+  React.useEffect(() => {
+    fetch('/api/retailers')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(ret => ({
+            id: ret._id,
+            shopName: ret.business_name,
+            owner: ret.owner_name,
+            email: ret.email,
+            mobile: ret.mobile,
+            address: ret.shop_address || '',
+            state: ret.state?.name || ret.state || 'Maharashtra',
+            city: ret.city?.name || ret.city || 'Mumbai',
+            category: ret.category || 'Standard',
+            promoter: ret.assigned_promoter?.full_name || 'None',
+            cityManager: ret.assigned_city_manager?.name || 'Sanjay Joshi',
+            ordersCount: ret.ordersCount || 10,
+            revenue: ret.revenue || 0,
+            status: ret.is_verified ? 'Approved' : 'Pending Verification',
+            gstNo: ret.gst_number || '',
+            panNo: ret.pan_number || '',
+            aadhaarNo: ret.aadhaar_number || ''
+          }));
+          setRetailers(mapped);
+        } else {
+          setRetailers(initialRetailers);
+        }
+      })
+      .catch(err => {
+        console.error("Error loading retailers from database:", err);
+        setRetailers(initialRetailers);
+      });
+  }, []);
+
   const [activeCategoryTab, setActiveCategoryTab] = useState('All'); // All | Platinum | Gold | Silver | Standard | Pending
 
   // Modals state
@@ -35,12 +71,30 @@ export default function Retailers({ showToast }) {
     }
 
     const newRetailer = {
-      id: `RET00${retailers.length + 1}`,
+      id: `RET-${Date.now()}`,
       ...formData,
       ordersCount: 0,
       revenue: 0,
       status: "Approved"
     };
+
+    // Save to database asynchronously
+    fetch('/api/retailers', {
+      method: 'POST',
+      body: JSON.stringify({
+        business_name: formData.shopName,
+        owner_name: formData.owner,
+        email: formData.email,
+        mobile: formData.mobile,
+        shop_address: formData.address,
+        category: formData.category,
+        gst_number: formData.gstNo,
+        pan_number: formData.panNo,
+        aadhaar_number: formData.aadhaarNo,
+        is_verified: true,
+        is_active: true
+      })
+    }).catch(err => console.error("Failed to save retailer:", err));
 
     setRetailers([...retailers, newRetailer]);
     setIsAddOpen(false);
@@ -171,7 +225,7 @@ export default function Retailers({ showToast }) {
       </div>
 
       {/* Tabs Row */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         {['All', 'Platinum', 'Gold', 'Silver', 'Standard', 'Pending'].map(tab => (
           <button 
             key={tab}
@@ -385,7 +439,7 @@ export default function Retailers({ showToast }) {
                 <h4 className="text-xs font-bold text-slate-500 uppercase">Outlet Monthly Sales Performance (₹)</h4>
                 <div className="h-44">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={mockRetailerChartData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                    <LineChart data={mockRetailerChartData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="month" fontSize={10} stroke="#94a3b8" />
                       <YAxis fontSize={10} stroke="#94a3b8" />
@@ -399,7 +453,7 @@ export default function Retailers({ showToast }) {
               {/* Order History */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase">Order History Preview</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="border border-slate-200 rounded-lg overflow-x-auto">
                   <table className="w-full text-left text-xs font-semibold text-slate-700">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                       <tr>

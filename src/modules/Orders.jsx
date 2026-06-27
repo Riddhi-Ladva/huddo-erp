@@ -4,8 +4,49 @@ import { initialOrders, initialWorkflowConfig } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 
 export default function Orders({ showToast }) {
-  const [orders, setOrders] = useState(initialOrders);
+  const [orders, setOrders] = useState([]);
   const [workflowConfig, setWorkflowConfig] = useState(initialWorkflowConfig);
+
+  React.useEffect(() => {
+    fetch('/api/orders')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(o => ({
+            id: o.order_number || o._id,
+            retailerName: o.retailer?.business_name || 'Walk Easy Footwear',
+            city: o.retailer?.city?.name || o.retailer?.city || 'Mumbai',
+            productsCount: o.items?.length || 0,
+            amount: o.subtotal,
+            paymentStatus: o.payment_status || 'Pending',
+            utrNo: o.utr_number || '',
+            date: o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : '2026-06-08',
+            status: o.status || 'Submitted',
+            items: o.items?.map(item => ({
+              name: item.product_variant?.product?.name || 'Huddo Air Classic',
+              size: item.product_variant?.size || '9',
+              color: item.product_variant?.color || 'Red',
+              qty: item.quantity,
+              price: item.unit_price
+            })) || [],
+            workflow: {
+              cityApproved: o.approval_chain?.find(c => c.level === 'CityManager')?.status === 'Approved',
+              stateApproved: o.approval_chain?.find(c => c.level === 'StateManager')?.status === 'Approved',
+              countryApproved: o.approval_chain?.find(c => c.level === 'CountryManager')?.status === 'Approved',
+              adminApproved: o.status === 'Approved' || o.status === 'Processing' || o.status === 'Delivered'
+            },
+            proofImage: o.payment_screenshot || ''
+          }));
+          setOrders(mapped);
+        } else {
+          setOrders(initialOrders);
+        }
+      })
+      .catch(err => {
+        console.error("Error loading orders:", err);
+        setOrders(initialOrders);
+      });
+  }, []);
   const [activeTab, setActiveTab] = useState('All'); // Status tab filtering
   const [activeSubView, setActiveSubView] = useState('orders'); // orders | config
 
@@ -29,6 +70,9 @@ export default function Orders({ showToast }) {
   };
 
   const handleApproveOrder = (id) => {
+    fetch(`/api/orders/${id}/approve`, { method: 'POST' })
+      .catch(err => console.error("Failed to approve order:", err));
+
     setOrders(orders.map(o => {
       if (o.id === id) {
         showToast(`Order ${id} approved by Admin.`, "success");
@@ -49,6 +93,12 @@ export default function Orders({ showToast }) {
       showToast("Please specify rejection reason.", "error");
       return;
     }
+
+    fetch(`/api/orders/${viewingOrder.id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: rejectReason })
+    }).catch(err => console.error("Failed to reject order:", err));
+
     setOrders(orders.map(o => {
       if (o.id === viewingOrder.id) {
         showToast(`Order ${viewingOrder.id} rejected: ${rejectReason}`, "error");
@@ -66,16 +116,19 @@ export default function Orders({ showToast }) {
   };
 
   const handleUpdateStatus = (id, newStatus) => {
+    fetch(`/api/orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: newStatus })
+    }).catch(err => console.error("Failed to update status:", err));
+
     setOrders(orders.map(o => {
       if (o.id === id) {
-        showToast(`Order status updated to ${newStatus}.`, "success");
+        showToast(`Order ${id} status updated to ${newStatus}`, "success");
         return { ...o, status: newStatus };
       }
       return o;
     }));
-    setViewingOrder(null);
   };
-
   // Filter orders
   const filteredOrders = orders.filter(ord => {
     if (activeTab === 'All') return true;
@@ -143,7 +196,7 @@ export default function Orders({ showToast }) {
       {activeSubView === 'orders' ? (
         <>
           {/* Status Tabs */}
-          <div className="flex border-b border-slate-200 overflow-x-auto">
+          <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
             {['All', 'Submitted', 'Approved', 'Processing', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Returned'].map(tab => (
               <button 
                 key={tab}
@@ -289,7 +342,7 @@ export default function Orders({ showToast }) {
               {/* Order items table list */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase">Ordered Items Matrix</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="border border-slate-200 rounded-lg overflow-x-auto">
                   <table className="w-full text-left text-xs font-semibold text-slate-700">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                       <tr>

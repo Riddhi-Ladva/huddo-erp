@@ -52,7 +52,7 @@ export default function BillingPayments({ showToast }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 bg-white px-4 pt-1 rounded-xl shadow-xs border">
+      <div className="flex border-b border-slate-200 bg-white px-4 pt-1 rounded-xl shadow-xs border overflow-x-auto whitespace-nowrap scrollbar-none">
         {['Invoices', 'Payment History', 'Outstanding Balance'].map(tab => {
           let badge = null;
           if (tab === 'Outstanding Balance' && outstandingInvoices.length > 0) {
@@ -238,7 +238,7 @@ export default function BillingPayments({ showToast }) {
           {/* List of due invoices */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-800 font-display">Unpaid Invoice Ledger</h3>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto">
               <table className="w-full text-left text-xs font-semibold text-slate-700 border-collapse">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                   <tr>
@@ -341,7 +341,7 @@ export default function BillingPayments({ showToast }) {
             </div>
 
             {/* GST Items Table */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto">
               <table className="w-full text-left text-[11px] font-semibold text-slate-700">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                   <tr>

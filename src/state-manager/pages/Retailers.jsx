@@ -270,7 +270,7 @@ export default function Retailers({
           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">New Retailers Added Per Month</h3>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={growthData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+              <BarChart data={growthData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={9} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} allowDecimals={false} />
                 <Tooltip contentStyle={{ fontSize: '10px' }} />
@@ -338,7 +338,7 @@ export default function Retailers({
                     <span className="text-slate-800 font-bold block">{selectedRetailer.mobile}</span>
                   </div>
                   <div className="space-y-0.5">
-                    <span className="text-[9px] text-slate-400 uppercase block">Territory / Location</span>
+                    <span className="text-[9px] text-slate-400 uppercase block">City / Location</span>
                     <span className="text-slate-800 font-bold block flex items-center gap-0.5">
                       <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" /> {selectedRetailer.city}, Gujarat
                     </span>
@@ -386,7 +386,7 @@ export default function Retailers({
                   <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Recent Orders (Last 5)</h5>
                   <ShoppingBag className="w-3.5 h-3.5 text-slate-400" />
                 </div>
-                <div className="border border-slate-100 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
+                <div className="border border-slate-100 rounded-xl overflow-x-auto max-h-36 overflow-y-auto">
                   <table className="w-full text-left border-collapse text-[10px] font-medium text-slate-500">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-[8px] text-slate-400 font-bold uppercase">

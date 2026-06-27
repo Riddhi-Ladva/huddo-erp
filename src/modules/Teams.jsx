@@ -1,23 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, User, Plus, Award, Layout, Briefcase, FileText, ChevronRight, X } from 'lucide-react';
-import { initialTeams } from '../mockData';
 import { Modal } from '../components/Common';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export default function Teams({ showToast }) {
-  const [teams, setTeams] = useState(initialTeams);
+  const [teams, setTeams] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingTeam, setViewingTeam] = useState(null);
 
   // Form State
   const [teamName, setTeamName] = useState('');
-  const [dept, setDept] = useState('Sales');
-  const [leader, setLeader] = useState('Sanjay Joshi');
+  const [dept, setDept] = useState('');
+  const [leader, setLeader] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [responsibilities, setResponsibilities] = useState('');
 
-  // Sample Member pool for team creation multi-select
-  const membersPool = ["Amit Kumar", "Karan Johar", "Sunita Rao", "Kiran Gowda", "Arjun Dev", "Rahul Shinde"];
+  const mapTeam = (t) => ({
+    id: t._id,
+    name: t.name,
+    department: t.department?.name || (typeof t.department === 'string' ? t.department : 'Sales'),
+    departmentId: t.department?._id || t.department,
+    leader: t.leader?.full_name || t.leader?.name || (typeof t.leader === 'string' ? t.leader : 'None'),
+    leaderId: t.leader?._id || t.leader,
+    memberCount: t.members?.length || 0,
+    members: t.members?.map(m => m.full_name || m.name || m) || [],
+    responsibilities: t.description || '',
+    performance: 85 // Computed or constant performance KPI
+  });
+
+  const loadData = () => {
+    fetch('/api/teams')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setTeams(resData.data.map(mapTeam));
+        } else if (Array.isArray(resData)) {
+          setTeams(resData.map(mapTeam));
+        }
+      })
+      .catch(err => console.error("Error loading teams:", err));
+
+    fetch('/api/departments')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setDepartments(resData.data);
+          if (resData.data.length > 0) {
+            setDept(resData.data[0].name);
+          }
+        }
+      })
+      .catch(err => console.error("Error loading departments:", err));
+
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setEmployees(resData.data);
+          if (resData.data.length > 0) {
+            setLeader(resData.data[0].full_name || resData.data[0].name);
+          }
+        }
+      })
+      .catch(err => console.error("Error loading employees:", err));
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const handleCreateSubmit = (e) => {
     e.preventDefault();
@@ -25,22 +77,47 @@ export default function Teams({ showToast }) {
       showToast("Please enter team name and responsibilities.", "error");
       return;
     }
-    const newTeam = {
-      id: `T${teams.length + 1}`,
+
+    const selectedDeptObj = departments.find(d => d.name === dept) || departments[0];
+    const selectedLeaderObj = employees.find(emp => (emp.full_name || emp.name) === leader) || employees[0];
+    const selectedMembersObjs = employees.filter(emp => selectedMembers.includes(emp.full_name || emp.name));
+
+    if (!selectedDeptObj) {
+      showToast("Please create a Department first.", "error");
+      return;
+    }
+
+    const payload = {
       name: teamName,
-      department: dept,
-      leader: leader,
-      memberCount: selectedMembers.length || 3,
-      performance: 85,
-      responsibilities: responsibilities
+      department: selectedDeptObj._id,
+      leader: selectedLeaderObj?._id,
+      members: selectedMembersObjs.map(m => m._id),
+      description: responsibilities,
+      is_active: true
     };
 
-    setTeams([...teams, newTeam]);
-    setIsCreateOpen(false);
-    setTeamName('');
-    setResponsibilities('');
-    setSelectedMembers([]);
-    showToast(`Team "${newTeam.name}" created successfully.`, "success");
+    fetch('/api/teams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && resData.data) {
+          showToast(`Team "${resData.data.name}" created successfully.`, "success");
+          setIsCreateOpen(false);
+          setTeamName('');
+          setResponsibilities('');
+          setSelectedMembers([]);
+          loadData();
+        } else {
+          showToast(resData.message || "Failed to create team.", "error");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        showToast("Error connecting to server.", "error");
+      });
   };
 
   const handleToggleMember = (name) => {
@@ -78,30 +155,36 @@ export default function Teams({ showToast }) {
       </div>
 
       {/* Grid of Teams */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {teams.map(team => (
-          <div 
-            key={team.id}
-            onClick={() => setViewingTeam(team)}
-            className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs hover:border-brand-orange cursor-pointer hover:shadow-md transition-all duration-300 flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="px-2 py-0.5 bg-orange-50 text-brand-orange text-[10px] font-bold border border-orange-200 rounded-full">{team.department}</span>
-                <span className="text-xs font-bold text-emerald-600">KPI: {team.performance}%</span>
+      {teams.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500">
+          No teams found in database. Click "Create Operations Team" to add one.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {teams.map(team => (
+            <div 
+              key={team.id}
+              onClick={() => setViewingTeam(team)}
+              className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs hover:border-brand-orange cursor-pointer hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="px-2 py-0.5 bg-orange-50 text-brand-orange text-[10px] font-bold border border-orange-200 rounded-full">{team.department}</span>
+                  <span className="text-xs font-bold text-emerald-600">KPI: {team.performance}%</span>
+                </div>
+                <h3 className="text-base font-bold text-slate-900 font-display mb-1">{team.name}</h3>
+                <p className="text-xs text-slate-400 font-semibold mb-4 flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Leader: {team.leader}</p>
+                <p className="text-xs text-slate-500 line-clamp-2">{team.responsibilities}</p>
               </div>
-              <h3 className="text-base font-bold text-slate-900 font-display mb-1">{team.name}</h3>
-              <p className="text-xs text-slate-400 font-semibold mb-4 flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Leader: {team.leader}</p>
-              <p className="text-xs text-slate-500 line-clamp-2">{team.responsibilities}</p>
+              
+              <div className="border-t border-slate-100 pt-3 mt-4 flex items-center justify-between text-xs text-slate-400 font-semibold">
+                <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-slate-400" /> {team.memberCount} Members</span>
+                <span className="text-brand-orange font-bold hover:underline flex items-center gap-0.5">Details <ChevronRight className="w-3 h-3" /></span>
+              </div>
             </div>
-            
-            <div className="border-t border-slate-100 pt-3 mt-4 flex items-center justify-between text-xs text-slate-400 font-semibold">
-              <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-slate-400" /> {team.memberCount} Members</span>
-              <span className="text-brand-orange font-bold hover:underline flex items-center gap-0.5">Details <ChevronRight className="w-3 h-3" /></span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Create Team Modal */}
       <Modal
@@ -129,13 +212,9 @@ export default function Teams({ showToast }) {
                 onChange={(e) => setDept(e.target.value)}
                 className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white"
               >
-                <option value="Sales">Sales</option>
-                <option value="Purchase">Purchase</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Inventory">Inventory</option>
-                <option value="Finance">Finance</option>
-                <option value="HR">HR</option>
-                <option value="Promoter">Promoter</option>
+                {departments.map(d => (
+                  <option key={d._id} value={d.name}>{d.name}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -145,10 +224,9 @@ export default function Teams({ showToast }) {
                 onChange={(e) => setLeader(e.target.value)}
                 className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white"
               >
-                <option value="Sanjay Joshi">Sanjay Joshi</option>
-                <option value="Nikhil Gowda">Nikhil Gowda</option>
-                <option value="Vikram Malhotra">Vikram Malhotra</option>
-                <option value="Sunil Mehta">Sunil Mehta</option>
+                {employees.map(emp => (
+                  <option key={emp._id} value={emp.full_name || emp.name}>{emp.full_name || emp.name}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -156,20 +234,21 @@ export default function Teams({ showToast }) {
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Add Members</label>
             <div className="flex flex-wrap gap-2 border border-slate-200 rounded-lg p-2 bg-slate-50/50 max-h-32 overflow-y-auto">
-              {membersPool.map(m => {
-                const isSelected = selectedMembers.includes(m);
+              {employees.map(emp => {
+                const nameStr = emp.full_name || emp.name;
+                const isSelected = selectedMembers.includes(nameStr);
                 return (
                   <button 
-                    key={m}
+                    key={emp._id}
                     type="button"
-                    onClick={() => handleToggleMember(m)}
+                    onClick={() => handleToggleMember(nameStr)}
                     className={`px-2.5 py-1 text-xs rounded-full border transition-all ${
                       isSelected 
                         ? 'bg-orange-50 border-brand-orange text-brand-orange font-semibold' 
                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
-                    {m}
+                    {nameStr}
                   </button>
                 );
               })}
@@ -237,7 +316,7 @@ export default function Teams({ showToast }) {
                 <h4 className="text-xs font-bold text-slate-500 uppercase">Quarter Target Achievement Comparison</h4>
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={mockTeamPerformanceData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                    <AreaChart data={mockTeamPerformanceData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                       <defs>
                         <linearGradient id="colorAchieved" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#f97316" stopOpacity={0.2}/>
@@ -258,7 +337,7 @@ export default function Teams({ showToast }) {
               {/* Member lists */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase">Team Members pool Roster</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="border border-slate-200 rounded-lg overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-500">
@@ -273,7 +352,7 @@ export default function Teams({ showToast }) {
                         <td className="px-4 py-2.5 text-slate-400">Team Leader</td>
                         <td className="px-4 py-2.5 text-right"><span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full font-bold">Active</span></td>
                       </tr>
-                      {membersPool.slice(0, viewingTeam.memberCount - 1).map((m, idx) => (
+                      {viewingTeam.members?.map((m, idx) => (
                         <tr key={idx}>
                           <td className="px-4 py-2.5 font-bold text-slate-800">{m}</td>
                           <td className="px-4 py-2.5 text-slate-400">Executive Rep</td>

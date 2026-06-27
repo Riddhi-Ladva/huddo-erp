@@ -1,35 +1,103 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, FileText, CheckCircle2, AlertTriangle, Send, ShieldAlert, Plus, HelpCircle, Save } from 'lucide-react';
-import { initialInvoices, initialTransactions, initialOutstandings, initialOrders, GEOGRAPHY } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 
-// HUDDO-UPDATE: Billing & Payment — Added retailer billing customer info logs, inline editable GST overrides with recalculations, and RBAC tab hiding
 export default function BillingPayments({ showToast, userRole }) {
   const [activeTab, setActiveTab] = useState('invoices'); // invoices | payments | outstanding | transactions
-  const [invoices, setInvoices] = useState(initialInvoices);
-  const [transactions, setTransactions] = useState(initialTransactions);
-  const [outstandings, setOutstandings] = useState(initialOutstandings);
+  const [invoices, setInvoices] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [outstandings, setOutstandings] = useState([]);
+  const [ordersList, setOrdersList] = useState([]);
 
-  // Modals state
+  // Generate Invoice Modal
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
-  const [isVerifyOpen, setIsVerifyOpen] = useState(false);
-  const [verifyingRecord, setVerifyingRecord] = useState(null); // transaction record
+  const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [billingType, setBillingType] = useState('Wholesale');
 
-  // Invoice generator state
-  const [selectedOrderId, setSelectedOrderId] = useState('ORD-7391');
-  const [billingType, setBillingType] = useState('Wholesale'); // Wholesale | Retailer
+  // Customer details for retail billing
   const [customerName, setCustomerName] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [customerCity, setCustomerCity] = useState('Mumbai');
+  const [customerCity, setCustomerCity] = useState('');
 
-  // Inline edit state
+  // Payment Verification Modal
+  const [isVerifyOpen, setIsVerifyOpen] = useState(false);
+  const [verifyingRecord, setVerifyingRecord] = useState(null);
+
+  // GST percentage override inline edit state
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
-  const [editingPercentage, setEditingPercentage] = useState('');
+  const [editingPercentage, setEditingPercentage] = useState(18);
+
+  const mapInvoice = (inv) => ({
+    id: inv._id,
+    invoiceNumber: inv.invoice_number || inv._id,
+    orderId: inv.order?.order_number || inv.order?._id || inv.order || '',
+    shopName: inv.retailer?.business_name || 'Walk Easy Footwear',
+    amount: inv.subtotal || 0,
+    tax: (inv.cgst || 0) + (inv.sgst || 0) + (inv.igst || 0),
+    total: inv.total || 0,
+    date: inv.payment_due_date ? new Date(inv.payment_due_date).toISOString().split('T')[0] : '',
+    status: inv.is_paid ? 'Paid' : 'Unpaid',
+    overridePercentage: inv.overridePercentage
+  });
+
+  const loadBillingData = () => {
+    fetch('/api/invoices')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setInvoices(resData.data.map(mapInvoice));
+        }
+      })
+      .catch(err => console.error("Error loading invoices:", err));
+
+    fetch('/api/orders')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          // Sync orders list for select options
+          setOrdersList(resData.data.map(o => ({
+            id: o.order_number || o._id,
+            _id: o._id,
+            retailerName: o.retailer?.business_name || 'Walk Easy Footwear',
+            retailerId: o.retailer?._id || o.retailer,
+            amount: o.subtotal || o.amount || 0
+          })));
+
+          // Transactions matching: orders with UTR or payment screenshot submitted
+          const txnOrders = resData.data.filter(o => o.utr_number || o.payment_screenshot);
+          setTransactions(txnOrders.map(o => ({
+            id: o._id,
+            utr: o.utr_number || 'PENDING',
+            amount: o.subtotal || o.amount || 0,
+            date: o.updatedAt ? new Date(o.updatedAt).toISOString().split('T')[0] : '2026-06-11',
+            status: o.payment_status === 'Verified' ? 'Verified' : (o.payment_status === 'Rejected' ? 'Rejected' : 'Pending Verification'),
+            shopName: o.retailer?.business_name || 'Retailer Outlet',
+            order: o.order_number || o._id
+          })));
+
+          // Outstanding checklist
+          const unpaidOrders = resData.data.filter(o => o.payment_status !== 'Verified' && o.payment_status !== 'Paid');
+          setOutstandings(unpaidOrders.map(o => ({
+            id: o._id,
+            shopName: o.retailer?.business_name || 'Retailer Outlet',
+            city: o.retailer?.city?.name || o.retailer?.city || 'Mumbai',
+            pendingAmount: o.subtotal || o.amount || 0,
+            overdueDays: 5,
+            lastReminder: 'Never'
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading transactions:", err));
+  };
+
+  useEffect(() => {
+    loadBillingData();
+  }, []);
 
   const handleGenerateInvoiceSubmit = (e) => {
     e.preventDefault();
-    const matchedOrder = initialOrders.find(o => o.id === selectedOrderId);
+    const matchedOrder = ordersList.find(o => o.id === selectedOrderId);
     if (!matchedOrder) return;
 
     if (billingType === 'Retailer') {
@@ -37,84 +105,107 @@ export default function BillingPayments({ showToast, userRole }) {
         showToast("Please fill all required customer fields.", "error");
         return;
       }
-      if (!/^\d{10}$/.test(customerMobile)) {
-        showToast("Please enter a valid 10-digit mobile number.", "error");
-        return;
-      }
     }
 
-    const netVal = matchedOrder.amount;
-    const gstVal = Math.round(netVal * 0.18);
-    const grossVal = netVal + gstVal;
-
-    const newInv = {
-      id: `INV-2026-${String(invoices.length + 1).padStart(3, '0')}`,
-      orderId: matchedOrder.id,
-      shopName: matchedOrder.retailerName,
-      amount: netVal,
-      tax: gstVal,
-      total: grossVal,
-      date: new Date().toISOString().split('T')[0],
-      status: "Unpaid"
+    const payload = {
+      order: matchedOrder._id || matchedOrder.id,
+      retailer: matchedOrder.retailerId,
+      subtotal: matchedOrder.amount,
+      cgst: Math.round(matchedOrder.amount * 0.09),
+      sgst: Math.round(matchedOrder.amount * 0.09),
+      igst: 0,
+      total: Math.round(matchedOrder.amount * 1.18),
+      payment_due_date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
     };
 
-    setInvoices([newInv, ...invoices]);
-
-    if (billingType === 'Retailer') {
-      fetch('/api/billing/retailer/customer-info', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoice_id: newInv.id,
-          customer_name: customerName,
-          mobile: customerMobile,
-          email: customerEmail,
-          city: customerCity,
-          amount: newInv.total
-        })
-      })
+    fetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
       .then(res => res.json())
-      .then(data => {
-        showToast(`Customer logged. Retailer Invoice ${newInv.id} generated.`, "success");
+      .then(resData => {
+        if (resData.success) {
+          if (billingType === 'Retailer') {
+            fetch('/api/billing/retailer/customer-info', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                invoice_id: resData.data?._id || `INV-${Date.now()}`,
+                customer_name: customerName,
+                mobile: customerMobile,
+                email: customerEmail,
+                city: customerCity,
+                amount: payload.total
+              })
+            }).catch(err => console.error(err));
+          }
+
+          showToast("GST Invoice generated successfully.", "success");
+          loadBillingData();
+          setIsGenerateOpen(false);
+          setCustomerName('');
+          setCustomerMobile('');
+          setCustomerEmail('');
+        } else {
+          showToast(resData.message || "Failed to generate invoice.", "error");
+        }
       })
       .catch(err => {
-        console.error("Error logging customer details", err);
+        console.error(err);
+        showToast("Error connecting to database.", "error");
       });
-    } else {
-      showToast(`Invoice ${newInv.id} generated for order ${newInv.orderId}`, "success");
-    }
-
-    setIsGenerateOpen(false);
-    // Reset forms
-    setCustomerName('');
-    setCustomerMobile('');
-    setCustomerEmail('');
   };
 
   const handleVerifyPayment = (isApproved) => {
     const status = isApproved ? 'Verified' : 'Rejected';
     
-    // update transaction
-    setTransactions(transactions.map(t => 
-      t.id === verifyingRecord.id ? { ...t, status: status } : t
-    ));
+    fetch(`/api/orders/${verifyingRecord.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payment_status: status })
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Payment UTR verification completed. Status set: ${status}`, isApproved ? "success" : "error");
+          loadBillingData();
+          setIsVerifyOpen(false);
+        } else {
+          showToast("Failed to verify payment.", "error");
+        }
+      })
+      .catch(err => console.error(err));
+  };
 
-    // update corresponding invoice status if verified
-    if (isApproved) {
-      setInvoices(invoices.map(inv => 
-        inv.orderId === verifyingRecord.order ? { ...inv, status: "Paid" } : inv
-      ));
-      // update outstanding record
-      setOutstandings(outstandings.filter(out => out.shopName !== verifyingRecord.shopName));
-    }
+  const triggerReminderModal = (row) => {
+    const payload = {
+      title: "Outstanding payment notice",
+      message: `Dear ${row.shopName}, you have an outstanding credit balance of ₹${row.pendingAmount}. Please settle immediately.`,
+      category: 'Target',
+      recipientRole: 'Retailer',
+      channels: ['EMAIL', 'SMS']
+    };
 
-    setIsVerifyOpen(false);
-    showToast(`Transaction UTR verification completed. Status set: ${status}`, isApproved ? "success" : "error");
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Broadcasting outstanding dues alert for ${row.shopName}.`, "success");
+        } else {
+          showToast("Failed to send reminder.", "error");
+        }
+      })
+      .catch(err => console.error(err));
   };
 
   // Generate Invoices columns
   const invoiceColumns = [
-    { header: "Invoice ID", accessor: "id", render: (val) => <span className="font-bold text-slate-800 font-mono">{val}</span> },
+    { header: "Invoice ID", accessor: "invoiceNumber", render: (val) => <span className="font-bold text-slate-800 font-mono">{val}</span> },
     { header: "Order Ref ID", accessor: "orderId" },
     { header: "Shop Name", accessor: "shopName", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
     { header: "Taxable Value", accessor: "amount", render: (val) => <span>₹{val.toLocaleString('en-IN')}</span> },
@@ -122,9 +213,10 @@ export default function BillingPayments({ showToast, userRole }) {
       header: "GST Tax %", 
       accessor: "overridePercentage", 
       render: (val, row) => {
+        const soccerPct = row.overridePercentage || 18;
         const isEditing = editingInvoiceId === row.id;
         return (
-          <div className="flex flex-col gap-1 text-[11px]">
+          <div className="flex flex-col gap-1 text-[11px] text-left">
             <div className="flex items-center gap-1.5">
               {isEditing ? (
                 <>
@@ -146,14 +238,14 @@ export default function BillingPayments({ showToast, userRole }) {
                           body: JSON.stringify({ percentage: Number(editingPercentage) })
                         });
                         const updated = await res.json();
-                        setInvoices(invoices.map(inv => inv.id === row.id ? updated : inv));
                         setEditingInvoiceId(null);
                         showToast(`GST percentage updated to ${editingPercentage}% for ${row.id}`, "success");
+                        loadBillingData();
                       } catch (err) {
                         showToast("Failed to update percentage", "error");
                       }
                     }}
-                    className="p-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 hover:bg-emerald-100"
+                    className="p-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 hover:bg-emerald-100 font-semibold"
                     title="Update"
                   >
                     <Save className="w-3.5 h-3.5" />
@@ -167,11 +259,11 @@ export default function BillingPayments({ showToast, userRole }) {
                 </>
               ) : (
                 <>
-                  <span className="font-bold text-slate-700">{row.overridePercentage || 18}%</span>
+                  <span className="font-bold text-slate-700">{soccerPct}%</span>
                   <button 
                     onClick={() => {
                       setEditingInvoiceId(row.id);
-                      setEditingPercentage(row.overridePercentage || 18);
+                      setEditingPercentage(soccerPct);
                     }}
                     className="text-brand-orange hover:underline text-[10px]"
                   >
@@ -218,8 +310,6 @@ export default function BillingPayments({ showToast, userRole }) {
     )}
   ];
 
-  // Payments verification table columns
-  // HUDDO-UPDATE: BillingPayments — Payment Matching holds a TODO for auto-settlement reconciliation
   const paymentColumns = [
     { header: "Txn ID", accessor: "id", render: (val) => <span className="font-bold text-slate-800 font-mono">{val}</span> },
     { header: "UTR Receipt No", accessor: "utr", render: (val) => <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-bold text-slate-600">{val}</code> },
@@ -239,7 +329,7 @@ export default function BillingPayments({ showToast, userRole }) {
       row.status === 'Pending Verification' ? (
         <button 
           onClick={() => { setVerifyingRecord(row); setIsVerifyOpen(true); }}
-          className="px-3 py-1 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded"
+          className="px-3 py-1 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded animate-pulse"
         >
           Verify Payment Receipt
         </button>
@@ -247,7 +337,6 @@ export default function BillingPayments({ showToast, userRole }) {
     )}
   ];
 
-  // Outstanding checklist columns
   const outstandingColumns = [
     { header: "Shop Name", accessor: "shopName", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
     { header: "City Region", accessor: "city" },
@@ -256,8 +345,8 @@ export default function BillingPayments({ showToast, userRole }) {
     { header: "Last Alert Sent", accessor: "lastReminder" },
     { header: "Actions", accessor: "id", sortable: false, render: (val, row) => (
       <button 
-        onClick={() => showToast(`Outstanding Payment reminder broadcasted via WhatsApp to ${row.shopName}`, "success")}
-        className="flex items-center gap-1 px-3 py-1 border border-slate-200 hover:border-slate-300 rounded text-xs font-bold text-slate-700 bg-white"
+        onClick={() => triggerReminderModal(row)}
+        className="flex items-center gap-1 px-3 py-1 border border-slate-200 hover:border-slate-300 rounded text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
       >
         <Send className="w-3.5 h-3.5" />
         <span>Broadcasting Reminder</span>
@@ -267,11 +356,15 @@ export default function BillingPayments({ showToast, userRole }) {
 
   const canViewAuditAndOutstanding = ['Founder', 'CEO', 'Admin', 'Finance Manager'].includes(userRole || 'Founder');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!canViewAuditAndOutstanding && (activeTab === 'outstanding' || activeTab === 'transactions')) {
       setActiveTab('invoices');
     }
   }, [userRole, activeTab, canViewAuditAndOutstanding]);
+
+  // Compute scorecard metrics dynamically
+  const totalCollections = transactions.filter(t => t.status === 'Verified').reduce((sum, t) => sum + t.amount, 0);
+  const totalOutstanding = outstandings.reduce((sum, o) => sum + o.pendingAmount, 0);
 
   return (
     <div className="space-y-6">
@@ -283,7 +376,7 @@ export default function BillingPayments({ showToast, userRole }) {
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Collections (This Month)</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">₹2.40 L</h3>
+            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">₹{totalCollections.toLocaleString('en-IN')}</h3>
           </div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
@@ -292,7 +385,7 @@ export default function BillingPayments({ showToast, userRole }) {
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Outstanding Dues</span>
-            <h3 className="text-xl font-bold text-rose-600 font-display mt-0.5">₹2.34 L</h3>
+            <h3 className="text-xl font-bold text-rose-600 font-display mt-0.5">₹{totalOutstanding.toLocaleString('en-IN')}</h3>
           </div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
@@ -301,7 +394,7 @@ export default function BillingPayments({ showToast, userRole }) {
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Active Invoices Mapped</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">3 Generated</h3>
+            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">{invoices.length} Generated</h3>
           </div>
         </div>
       </div>
@@ -324,7 +417,7 @@ export default function BillingPayments({ showToast, userRole }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveTab('invoices')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'invoices' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -393,7 +486,7 @@ export default function BillingPayments({ showToast, userRole }) {
         title="Generate GST Invoice"
         onConfirm={handleGenerateInvoiceSubmit}
       >
-        <form className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+        <form className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 text-left">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Billing Type</label>
             <select 
@@ -403,6 +496,19 @@ export default function BillingPayments({ showToast, userRole }) {
             >
               <option value="Wholesale">Wholesale Billing (Standard Retailer Account)</option>
               <option value="Retailer">Retailer Billing (End Consumer Details)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Order ID</label>
+            <select 
+              value={selectedOrderId} 
+              onChange={(e) => setSelectedOrderId(e.target.value)}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
+            >
+              {ordersList.map(o => (
+                <option key={o._id} value={o.id}>{o.id} — {o.retailerName} (₹{o.amount.toLocaleString('en-IN')})</option>
+              ))}
             </select>
           </div>
 
@@ -420,99 +526,71 @@ export default function BillingPayments({ showToast, userRole }) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Mobile Number (10-Digit) *</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Mobile Number *</label>
                 <input 
                   type="text" 
-                  maxLength={10} 
                   value={customerMobile} 
                   onChange={(e) => setCustomerMobile(e.target.value)} 
-                  placeholder="e.g. 9876543210" 
+                  placeholder="10-digit mobile number" 
                   className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none bg-white"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Email Address</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Email ID (Optional)</label>
                 <input 
                   type="email" 
                   value={customerEmail} 
                   onChange={(e) => setCustomerEmail(e.target.value)} 
-                  placeholder="e.g. ramesh@gmail.com" 
+                  placeholder="customer@email.com" 
                   className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none bg-white"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">City *</label>
-                <select 
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">City Location *</label>
+                <input 
+                  type="text" 
                   value={customerCity} 
-                  onChange={(e) => setCustomerCity(e.target.value)}
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2 bg-white focus:outline-none"
-                >
-                  {GEOGRAPHY.cities.map(c => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
+                  onChange={(e) => setCustomerCity(e.target.value)} 
+                  placeholder="e.g. Pune" 
+                  className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none bg-white"
+                />
               </div>
             </div>
           )}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Order Reference ID</label>
-            <select 
-              value={selectedOrderId} 
-              onChange={(e) => setSelectedOrderId(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
-            >
-              {initialOrders.filter(o => o.status === 'Approved').map(o => (
-                <option key={o.id} value={o.id}>{o.id} — {o.retailerName} (₹{o.amount})</option>
-              ))}
-            </select>
-          </div>
-          <div className="bg-slate-50 p-4 border border-slate-100 rounded-xl space-y-2 text-xs text-slate-600">
-            <span className="font-bold text-slate-800">GST Invoice preview configurations:</span>
-            <p>• Applied Central & State wholesale footwear GST tax rate: <strong>18%</strong></p>
-            <p>• Bill details will be generated from active order items list.</p>
-          </div>
         </form>
       </Modal>
 
       {/* Verify Payment Modal */}
-      {isVerifyOpen && verifyingRecord && (
-        <Modal
-          isOpen={isVerifyOpen}
-          onClose={() => setIsVerifyOpen(false)}
-          title="Verify Deposited UTR Ledger Match"
-        >
-          <div className="space-y-4">
-            <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-2 text-xs">
-              <h4 className="font-bold text-slate-700">Transaction details</h4>
-              <p>UTR Receipt No: <strong>{verifyingRecord.utr}</strong></p>
-              <p>Registered Order ID: <strong>{verifyingRecord.order}</strong></p>
-              <p>Net Deposit Amount: <strong className="text-slate-900 text-sm">₹{verifyingRecord.amount.toLocaleString('en-IN')}</strong></p>
+      <Modal
+        isOpen={isVerifyOpen}
+        onClose={() => setIsVerifyOpen(false)}
+        title="Verify Payment UTR Receipt"
+        onConfirm={() => handleVerifyPayment(true)}
+        confirmLabel="Verify & Settle"
+        cancelLabel="Reject Payment"
+        onCancel={() => handleVerifyPayment(false)}
+      >
+        <div className="space-y-4 text-left">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex gap-2.5 text-xs text-blue-800">
+            <HelpCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p>Ensure the bank account has received a credit transaction corresponding to UTR No: <b>{verifyingRecord?.utr}</b> before verifying.</p>
+          </div>
+          <div className="border border-slate-100 rounded-lg p-3 space-y-2 text-xs text-slate-600 font-semibold">
+            <div className="flex justify-between">
+              <span>Deposited Outlet:</span>
+              <span className="text-slate-800 font-bold">{verifyingRecord?.shopName}</span>
             </div>
-            
-            {/* Mock screenshot proof mapping */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <span className="block text-[10px] uppercase font-bold text-slate-400 p-2 bg-slate-50">Retailer Deposit Receipt Preview</span>
-              <img src="https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?w=400" alt="Proof receipt" className="w-full h-40 object-cover" />
+            <div className="flex justify-between">
+              <span>Order Reference:</span>
+              <span className="text-slate-800 font-bold font-mono">{verifyingRecord?.order}</span>
             </div>
-
-            <div className="flex gap-2 justify-end pt-2">
-              <button 
-                onClick={() => handleVerifyPayment(false)} 
-                className="px-4 py-2 border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded"
-              >
-                Reject Receipt
-              </button>
-              <button 
-                onClick={() => handleVerifyPayment(true)} 
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded"
-              >
-                Verify & Settle Accounts
-              </button>
+            <div className="flex justify-between text-sm border-t pt-2 mt-2">
+              <span>Payment Amount:</span>
+              <span className="text-slate-900 font-extrabold text-brand-orange">₹{verifyingRecord?.amount.toLocaleString('en-IN')}</span>
             </div>
           </div>
-        </Modal>
-      )}
+        </div>
+      </Modal>
 
     </div>
   );

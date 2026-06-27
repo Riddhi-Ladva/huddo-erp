@@ -25,7 +25,27 @@ export default function Reports({
   const [statusFilter, setStatusFilter] = useState('All');
 
   const handleExport = (format) => {
-    showToast(`Exporting Ahmedabad ${activeReportTab} Report in ${format} format...`, 'success');
+    let filename = `city_manager_${activeReportTab.toLowerCase()}_report_${Date.now()}.${format.toLowerCase()}`;
+    let content = `--- AHMEDABAD ${activeReportTab.toUpperCase()} REPORT ---\nGenerated: ${new Date().toLocaleDateString()}\nFormat: ${format.toUpperCase()}\n\n`;
+    
+    if (activeReportTab === 'Sales') {
+      content += "Date,Revenue\n" + dailySalesTrend.map(item => `"${item.date}",${item.revenue}`).join("\n");
+    } else {
+      content += "Status,Details\nActive,Data compiled for regional city operations.";
+    }
+
+    const blobType = format.toLowerCase() === 'pdf' ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+    const blob = new Blob([content], { type: blobType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast(`Successfully downloaded Ahmedabad ${activeReportTab} Report as ${format.toUpperCase()}.`, 'success');
   };
 
   const tabs = [
@@ -123,7 +143,7 @@ export default function Reports({
       </div>
 
       {/* Report Switcher Tabs */}
-      <div className="flex border-b border-slate-200 select-none overflow-x-auto max-w-full">
+      <div className="flex border-b border-slate-200 select-none overflow-x-auto max-w-full whitespace-nowrap scrollbar-none">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeReportTab === tab.id;
@@ -202,7 +222,7 @@ export default function Reports({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4"> Ahmedabad Daily Sales Trend (June 2026)</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailySalesTrend} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <LineChart data={dailySalesTrend} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(v) => `₹${v/1000}k`} />
@@ -253,7 +273,7 @@ export default function Reports({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Ahmedabad Retailer Revenues</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={retailerSalesData} layout="vertical" margin={{ top: 5, right: 5, left: 10, bottom: 5 }}>
+                  <BarChart data={retailerSalesData} layout="vertical" margin={{ top: 5, right: 5, left: 55, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                     <XAxis type="number" stroke="#94a3b8" fontSize={9} tickLine={false} tickFormatter={(v) => `₹${v/1000}k`} />
                     <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} width={80} />
@@ -312,7 +332,7 @@ export default function Reports({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Ahmedabad Orders Weekly Split</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={orderStatusMetrics} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <BarChart data={orderStatusMetrics} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="week" stroke="#94a3b8" fontSize={9} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
@@ -374,7 +394,7 @@ export default function Reports({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Daily Visits (Last 7 Days)</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={visitTrendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <BarChart data={visitTrendData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="day" stroke="#94a3b8" fontSize={9} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} allowDecimals={false} />
@@ -435,7 +455,7 @@ export default function Reports({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Leads by Funnel Stage</h3>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={leadFunnelData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <BarChart data={leadFunnelData} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} allowDecimals={false} />

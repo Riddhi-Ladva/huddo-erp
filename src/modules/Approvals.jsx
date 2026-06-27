@@ -1,18 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckSquare, CheckCircle, XCircle, AlertTriangle, ShieldCheck, ShieldAlert, Settings, FileText } from 'lucide-react';
-import { initialApprovals, initialWorkflowConfig } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 
 export default function Approvals({ showToast }) {
   const [activeTab, setActiveTab] = useState('pending'); // pending | config | history
-  const [approvals, setApprovals] = useState(initialApprovals);
-  const [workflowConfig, setWorkflowConfig] = useState(initialWorkflowConfig);
+  const [approvals, setApprovals] = useState([]);
+  const [workflowConfig, setWorkflowConfig] = useState({
+    orders: { city: true, state: false, country: true, admin: true },
+    retailers: { city: false, state: true, country: false, admin: true },
+    commissions: { city: false, state: false, country: true, admin: true }
+  });
   const [pendingFilter, setPendingFilter] = useState('All'); // request type filter
 
   // Comment Modal state
   const [selectedReq, setSelectedReq] = useState(null);
   const [reqAction, setReqAction] = useState('approve'); // approve | reject
   const [commentVal, setCommentVal] = useState('');
+
+  const loadApprovals = () => {
+    Promise.all([
+      fetch('/api/orders').then(res => res.json()),
+      fetch('/api/retailers').then(res => res.json())
+    ]).then(([ordersData, retailersData]) => {
+      const mappedOrders = (ordersData.success && Array.isArray(ordersData.data) ? ordersData.data : [])
+        .filter(o => o.status === 'Submitted' || o.status === 'Pending')
+        .map(o => ({
+          id: o._id,
+          requester: o.retailer?.business_name || 'Unknown Retailer',
+          type: "Large Orders",
+          status: "Pending",
+          details: `Order ref ${o.order_number || o._id} of value ₹${o.subtotal || o.amount} requires approval.`,
+          date: o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : '2026-06-11',
+          rawType: 'order'
+        }));
+
+      const mappedRetailers = (retailersData.success && Array.isArray(retailersData.data) ? retailersData.data : [])
+        .filter(r => !r.is_verified)
+        .map(r => ({
+          id: r._id,
+          requester: r.business_name || r.owner_name || 'New Retailer',
+          type: "Retailer Registration",
+          status: "Pending",
+          details: `Retailer ${r.business_name || r.owner_name} requested shop category verification.`,
+          date: r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '2026-06-11',
+          rawType: 'retailer'
+        }));
+
+      // Set combined approvals
+      setApprovals([...mappedOrders, ...mappedRetailers]);
+    }).catch(err => console.error("Error loading approvals:", err));
+  };
+
+  useEffect(() => {
+    loadApprovals();
+  }, []);
 
   const handleActionClick = (req, action) => {
     setSelectedReq(req);
@@ -22,21 +63,39 @@ export default function Approvals({ showToast }) {
 
   const handleConfirmActionSubmit = () => {
     const isApprove = reqAction === 'approve';
-    setApprovals(approvals.map(req => {
-      if (req.id === selectedReq.id) {
-        showToast(
-          `Request ${selectedReq.id} has been ${isApprove ? 'Approved' : 'Rejected'}.`,
-          isApprove ? "success" : "error"
-        );
-        return {
-          ...req,
-          status: isApprove ? 'Approved' : 'Rejected',
-          comment: commentVal || (isApprove ? 'Approved by Admin' : 'Rejected by Admin')
-        };
-      }
-      return req;
-    }));
-    setSelectedReq(null);
+    const endpoint = selectedReq.rawType === 'order'
+      ? `/api/orders/${selectedReq.id}/${isApprove ? 'approve' : 'reject'}`
+      : `/api/retailers/${selectedReq.id}`;
+
+    const fetchMethod = selectedReq.rawType === 'order' ? 'POST' : 'PUT';
+    const payload = selectedReq.rawType === 'order'
+      ? JSON.stringify({ comment: commentVal })
+      : JSON.stringify({ is_verified: isApprove });
+
+    fetch(endpoint, {
+      method: fetchMethod,
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(
+            `Request has been ${isApprove ? 'Approved' : 'Rejected'} successfully.`,
+            isApprove ? "success" : "error"
+          );
+          loadApprovals();
+        } else {
+          showToast(resData.message || "Operation failed.", "error");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        showToast("Error connecting to database.", "error");
+      })
+      .finally(() => {
+        setSelectedReq(null);
+      });
   };
 
   const handleToggleWorkflowLevel = (moduleKey, levelKey) => {
@@ -99,16 +158,16 @@ export default function Approvals({ showToast }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header and filter bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 font-display">Approval Workflow System</h1>
-          <p className="text-sm text-slate-500">Audit system requests pipelines, verify credit override waivers, and adjust automated approval flows.</p>
+          <h1 className="text-2xl font-bold text-slate-900 font-display">Approval Workflows</h1>
+          <p className="text-sm text-slate-500">Inspect pending administrative authorizations, audit past overrides, and manage hierarchy routing protocols.</p>
         </div>
       </div>
 
-      {/* Main Tabs Navigation */}
-      <div className="flex border-b border-slate-200">
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveTab('pending')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'pending' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -119,144 +178,158 @@ export default function Approvals({ showToast }) {
           onClick={() => setActiveTab('config')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'config' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Workflow Configuration Panel
+          Approval Flow Configs
         </button>
         <button 
           onClick={() => setActiveTab('history')}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'history' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Approval History Logs
+          History Ledger Logs ({historyRequests.length})
         </button>
       </div>
 
-      {/* Tab Contents */}
+      {/* Pending inbox tab */}
       {activeTab === 'pending' && (
-        <div className="space-y-4">
-          {/* Quick Filters Row */}
-          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex gap-2 overflow-x-auto">
-            {['All', 'Retailer Registration', 'Large Orders', 'Discounts', 'Commission Changes'].map(f => (
-              <button
-                key={f}
-                onClick={() => setPendingFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all ${
-                  pendingFilter === f 
-                    ? 'bg-slate-900 text-white border-slate-900' 
-                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                }`}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
+          <div className="flex flex-wrap gap-4 items-center justify-between text-left">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-900 font-display">Authorizations Queue</h3>
+              <p className="text-xs text-slate-400 font-semibold">Inspect credentials validation and payment margin approvals waiting for superadmin resolution.</p>
+            </div>
+            
+            <div>
+              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">Filter Request Type</label>
+              <select 
+                value={pendingFilter}
+                onChange={(e) => setPendingFilter(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg p-2 bg-white focus:outline-none"
               >
-                {f}
-              </button>
-            ))}
+                <option value="All">All Types</option>
+                <option value="Retailer Registration">Retailer Registrations</option>
+                <option value="Large Orders">Large Orders</option>
+              </select>
+            </div>
           </div>
 
           <DataTable 
             columns={pendingColumns} 
             data={pendingRequests} 
             searchKeys={["id", "requester", "details"]}
-            searchPlaceholder="Search pending alerts..."
+            searchPlaceholder="Search pending authorizations inbox..."
           />
         </div>
       )}
 
+      {/* History inbox tab */}
       {activeTab === 'history' && (
-        <DataTable 
-          columns={historyColumns} 
-          data={historyRequests} 
-          searchKeys={["id", "requester", "details", "comment"]}
-          searchPlaceholder="Search historical approvals..."
-        />
-      )}
-
-      {activeTab === 'config' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
           <div>
-            <h3 className="text-base font-bold text-slate-900 font-display">Approval Path Routing Engine</h3>
-            <p className="text-xs text-slate-400 font-semibold mt-0.5">Toggle checking levels per request type. Admin review is permanently mapped as the final mandatory gateway across all operations.</p>
+            <h3 className="text-sm font-bold text-slate-900 font-display">Authorizations Audit trail logs</h3>
+            <p className="text-xs text-slate-400 font-semibold font-sans">Inspect historic actions taken across system overrides, pricing slabs, or retailer verifications.</p>
           </div>
 
-          <div className="space-y-6">
-            {/* Orders Workflow */}
-            <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-xl space-y-3">
-              <h4 className="text-sm font-bold text-slate-800 font-display">Pipeline A: Wholesale Orders Approvals</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
-                {['city', 'state', 'country'].map(level => {
-                  const isEnabled = workflowConfig.orders[level];
-                  return (
-                    <div key={level} className="flex justify-between items-center p-3 bg-white border border-slate-200/60 rounded-xl">
-                      <span className="text-xs font-bold text-slate-700 capitalize">{level} Manager Check</span>
-                      <button 
-                        onClick={() => handleToggleWorkflowLevel('orders', level)}
-                        className={`w-10 h-5 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-300 ${isEnabled ? 'bg-brand-orange' : 'bg-slate-300'}`}
-                      >
-                        <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-300 ${isEnabled ? 'translate-x-5' : ''}`}></span>
-                      </button>
-                    </div>
-                  );
-                })}
-                <div className="flex justify-between items-center p-3 bg-slate-900 text-white rounded-xl">
-                  <span className="text-xs font-bold text-slate-300 uppercase">Corporate Admin</span>
-                  <span className="text-[10px] bg-brand-orange text-white px-2 py-0.5 rounded font-bold uppercase">Locked</span>
-                </div>
-              </div>
+          <DataTable 
+            columns={historyColumns} 
+            data={historyRequests} 
+            searchKeys={["id", "requester", "comment"]}
+            searchPlaceholder="Search history override logs..."
+          />
+        </div>
+      )}
+
+      {/* Workflow configs tab */}
+      {activeTab === 'config' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 font-display">Geographic Approval Routing Rules</h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">Toggle hierarchy level checkpoints required for system actions.</p>
             </div>
 
-            {/* Retailer Onboarding Workflow */}
-            <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-xl space-y-3">
-              <h4 className="text-sm font-bold text-slate-800 font-display">Pipeline B: Retailer Shop Registration Approvals</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
-                {['city', 'state', 'country'].map(level => {
-                  const isEnabled = workflowConfig.retailers[level];
-                  return (
-                    <div key={level} className="flex justify-between items-center p-3 bg-white border border-slate-200/60 rounded-xl">
-                      <span className="text-xs font-bold text-slate-700 capitalize">{level} Manager Check</span>
+            <div className="space-y-6">
+              {/* Retailer Registrations */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-brand-orange" /> Retailer Category Registrations</span>
+                <div className="grid grid-cols-4 gap-3">
+                  {['city', 'state', 'country', 'admin'].map(level => {
+                    const isEnabled = workflowConfig.retailers[level];
+                    return (
                       <button 
+                        key={level}
                         onClick={() => handleToggleWorkflowLevel('retailers', level)}
-                        className={`w-10 h-5 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-300 ${isEnabled ? 'bg-brand-orange' : 'bg-slate-300'}`}
+                        className={`p-3 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${isEnabled ? 'bg-orange-50/50 border-brand-orange text-brand-orange font-bold' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}
                       >
-                        <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-300 ${isEnabled ? 'translate-x-5' : ''}`}></span>
+                        <span className="text-[10px] uppercase">{level}</span>
+                        <span className="text-[8px] font-semibold">{isEnabled ? 'Enforced' : 'Skipped'}</span>
                       </button>
-                    </div>
-                  );
-                })}
-                <div className="flex justify-between items-center p-3 bg-slate-900 text-white rounded-xl">
-                  <span className="text-xs font-bold text-slate-300 uppercase">Corporate Admin</span>
-                  <span className="text-[10px] bg-brand-orange text-white px-2 py-0.5 rounded font-bold uppercase">Locked</span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Large Orders */}
+              <div className="space-y-3 pt-2">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-brand-orange" /> Large Wholesale Order Approvals (&gt; ₹50K)</span>
+                <div className="grid grid-cols-4 gap-3">
+                  {['city', 'state', 'country', 'admin'].map(level => {
+                    const isEnabled = workflowConfig.orders[level];
+                    return (
+                      <button 
+                        key={level}
+                        onClick={() => handleToggleWorkflowLevel('orders', level)}
+                        className={`p-3 border rounded-xl flex flex-col items-center gap-1 cursor-pointer transition-all ${isEnabled ? 'bg-orange-50/50 border-brand-orange text-brand-orange font-bold' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}
+                      >
+                        <span className="text-[10px] uppercase">{level}</span>
+                        <span className="text-[8px] font-semibold">{isEnabled ? 'Enforced' : 'Skipped'}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
+          </div>
 
+          {/* Guidelines info side panel */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2"><FileText className="w-4 h-4 text-brand-orange" /> Governance Routing Guidelines</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-semibold">In huddo-ERP, workflow layers are fully integrated with organizational hierarchies. If a layer is "Enforced", requests submitted within a jurisdiction must receive digital signature authorization from the corresponding manager level before escalating to next tier.</p>
+              
+              <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-2 text-[11px] text-slate-600">
+                <span className="font-bold text-slate-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-brand-orange" /> Admin Overwrite Rights</span>
+                <p>Founder and Super Administrator profiles bypass regional flow restrictions and can approve or discard entries at any step.</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-50 border border-slate-100 p-3 rounded-lg flex gap-2 text-[10px] text-slate-500 font-semibold mt-4">
+              <ShieldAlert className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <p>Routing configurations are global parameters. Changes take effect on newly compiled validation structures immediately.</p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Comment overlay modal */}
-      {selectedReq && (
-        <Modal
-          isOpen={selectedReq !== null}
-          onClose={() => setSelectedReq(null)}
-          title={`${reqAction === 'approve' ? 'Approve' : 'Reject'} Request Alert`}
-          onConfirm={handleConfirmActionSubmit}
-          isDestructive={reqAction === 'reject'}
-        >
-          <div className="space-y-4">
-            <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-1 text-xs">
-              <span className="text-slate-400 font-semibold uppercase">Request Details</span>
-              <p className="font-bold text-slate-800 text-sm font-display">{selectedReq.requester}</p>
-              <p className="text-slate-500 font-medium">{selectedReq.details}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Authorization Comments / Remarks</label>
-              <textarea 
-                rows="3" 
-                placeholder="Enter audit statement or review comment..." 
-                value={commentVal}
-                onChange={(e) => setCommentVal(e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
-              />
-            </div>
+      {/* Approve/Reject comment dialog */}
+      <Modal
+        isOpen={selectedReq !== null}
+        onClose={() => setSelectedReq(null)}
+        title={`${reqAction === 'approve' ? 'Approve' : 'Reject'} Authorization Request`}
+        onConfirm={handleConfirmActionSubmit}
+      >
+        <div className="space-y-3 text-left">
+          <p className="text-xs text-slate-600 font-semibold">Please enter any override comments, remarks, or notes below to document in system log.</p>
+          <div>
+            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Remarks / Remarks</label>
+            <textarea 
+              rows="3" 
+              placeholder={`e.g., Checked details. Request ${reqAction === 'approve' ? 'approved' : 'rejected'} under verification checks...`}
+              value={commentVal}
+              onChange={(e) => setCommentVal(e.target.value)}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2 focus:outline-none"
+            />
           </div>
-        </Modal>
-      )}
+        </div>
+      </Modal>
 
     </div>
   );

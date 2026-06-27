@@ -256,19 +256,64 @@ export function DataTable({
             >
               Previous
             </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i}
-                onClick={() => handlePageChange(i + 1)}
-                className={`w-8 h-8 flex items-center justify-center text-sm rounded-md font-semibold transition-colors ${
-                  currentPage === i + 1 
-                    ? 'bg-brand-orange text-white' 
-                    : 'border border-transparent hover:bg-slate-100 text-slate-600'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {(() => {
+              const maxVisible = 5;
+              const pages = [];
+              if (totalPages <= maxVisible) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                const half = Math.floor(maxVisible / 2);
+                let start = currentPage - half;
+                let end = currentPage + half;
+                if (start <= 1) {
+                  start = 1;
+                  end = maxVisible;
+                } else if (end >= totalPages) {
+                  end = totalPages;
+                  start = totalPages - maxVisible + 1;
+                }
+                for (let i = start; i <= end; i++) pages.push(i);
+              }
+              return (
+                <>
+                  {pages[0] > 1 && (
+                    <>
+                      <button
+                        onClick={() => handlePageChange(1)}
+                        className="w-8 h-8 flex items-center justify-center text-sm rounded-md font-semibold hover:bg-slate-100 text-slate-650 cursor-pointer"
+                      >
+                        1
+                      </button>
+                      {pages[0] > 2 && <span className="px-1 text-slate-400 text-xs font-bold select-none">...</span>}
+                    </>
+                  )}
+                  {pages.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handlePageChange(p)}
+                      className={`w-8 h-8 flex items-center justify-center text-sm rounded-md font-semibold transition-colors cursor-pointer ${
+                        currentPage === p 
+                          ? 'bg-brand-orange text-white' 
+                          : 'border border-transparent hover:bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  {pages[pages.length - 1] < totalPages && (
+                    <>
+                      {pages[pages.length - 1] < totalPages - 1 && <span className="px-1 text-slate-400 text-xs font-bold select-none">...</span>}
+                      <button
+                        onClick={() => handlePageChange(totalPages)}
+                        className="w-8 h-8 flex items-center justify-center text-sm rounded-md font-semibold hover:bg-slate-100 text-slate-650 cursor-pointer"
+                      >
+                        {totalPages}
+                      </button>
+                    </>
+                  )}
+                </>
+              );
+            })()}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}

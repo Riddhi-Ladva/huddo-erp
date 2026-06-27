@@ -1,27 +1,29 @@
-import React, { useState } from 'react';
-import { Archive, Plus, RefreshCw, AlertTriangle, Layers, Save, HelpCircle } from 'lucide-react';
-import { initialInventory, warehouses } from '../mockData';
+import React, { useState, useEffect } from 'react';
+import { Archive, Plus, RefreshCw, AlertTriangle, Layers, Save, HelpCircle, Send } from 'lucide-react';
 import { DataTable, Modal } from '../components/Common';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
-// HUDDO-UPDATE: Inventory — Added Return Stock Workflow tab with selectors, API logs, and history list
 export default function Inventory({ showToast }) {
   const [activeTab, setActiveTab] = useState('stock'); // stock | alerts | transfer | warehouses | returns | reports
-  const [stock, setStock] = useState(initialInventory);
-  const [whList, setWhList] = useState(warehouses);
+  const [stock, setStock] = useState([]);
+  const [whList, setWhList] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [productVariants, setProductVariants] = useState([]);
 
   // Modals state
   const [isAddWhOpen, setIsAddWhOpen] = useState(false);
+  const [isRaiseBulkOpen, setIsRaiseBulkOpen] = useState(false);
   const [newWh, setNewWh] = useState({ name: '', location: '', manager: '', capacity: '' });
 
   // Stock transfer state
   const [transferData, setTransferData] = useState({
-    fromWh: 'Mumbai Central Whse',
-    toWh: 'Delhi NCR Whse',
-    product: 'Huddo Air Classic',
-    qty: '50',
-    date: '2026-06-08'
+    fromWh: '',
+    toWh: '',
+    product: '',
+    qty: '50'
   });
+
+  const [transferHistory, setTransferHistory] = useState([]);
 
   // Returns workflow state
   const [returnHistory, setReturnHistory] = useState([]);
@@ -33,18 +35,108 @@ export default function Inventory({ showToast }) {
     notes: ''
   });
 
-  React.useEffect(() => {
+  const mapStock = (s) => ({
+    id: s._id,
+    name: s.product_variant?.product?.name || s.sku || 'Footwear Model',
+    sku: s.product_variant?.sku || s.sku || 'HDO-AC-RD-08',
+    stockLevel: s.quantity || s.stockLevel || 0,
+    warehouse: s.warehouse?.name || s.warehouse || 'Mumbai Central Whse',
+    reorderLevel: s.reorder_level || 50,
+    status: (s.quantity || s.stockLevel) <= (s.reorder_level || 50) ? ((s.quantity || s.stockLevel) === 0 ? 'Out of Stock' : 'Low Stock') : 'Normal',
+    size: s.product_variant?.size || '8',
+    color: s.product_variant?.colour || 'Red',
+    category: s.product_variant?.product?.category?.name || 'Sports Shoes'
+  });
+
+  const mapWarehouse = (w) => ({
+    id: w._id,
+    name: w.name,
+    location: w.location || 'Mumbai',
+    manager: w.manager?.full_name || w.manager?.name || (typeof w.manager === 'string' ? w.manager : 'Rajesh Deshpande'),
+    managerId: w.manager?._id || w.manager,
+    capacity: w.capacity || '10,000 SKUs'
+  });
+
+  const mapTransfer = (t) => ({
+    id: t.transfer_number || t._id,
+    _id: t._id,
+    product: t.product_variant?.sku || t.product || 'Footwear Model',
+    fromWh: t.from_warehouse?.name || t.fromWh || 'Mumbai Warehouse',
+    toWh: t.to_warehouse?.name || t.toWh || 'Delhi Warehouse',
+    qty: t.quantity || t.qty || 50,
+    date: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '2026-06-08',
+    status: t.status || 'Completed'
+  });
+
+  const loadInventoryData = () => {
+    fetch('/api/stock-records')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(mapStock);
+          setStock(mapped);
+          if (mapped.length > 0) {
+            setReturnForm(prev => ({ ...prev, productId: mapped[0].id }));
+          }
+        }
+      })
+      .catch(err => console.error("Error loading stocks:", err));
+
+    fetch('/api/warehouses')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(mapWarehouse);
+          setWhList(mapped);
+          if (mapped.length > 1) {
+            setTransferData(prev => ({ ...prev, fromWh: mapped[0].name, toWh: mapped[1].name }));
+          }
+        }
+      })
+      .catch(err => console.error("Error loading warehouses:", err));
+
+    fetch('/api/stock-transfers')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setTransferHistory(resData.data.map(mapTransfer));
+        }
+      })
+      .catch(err => console.error("Error loading transfers:", err));
+
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setEmployees(resData.data);
+          if (resData.data.length > 0) {
+            setNewWh(prev => ({ ...prev, manager: resData.data[0].full_name || resData.data[0].name }));
+          }
+        }
+      })
+      .catch(err => console.error("Error loading employees:", err));
+
+    fetch('/api/product-variants')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setProductVariants(resData.data);
+          if (resData.data.length > 0) {
+            setTransferData(prev => ({ ...prev, product: resData.data[0].sku }));
+          }
+        }
+      })
+      .catch(err => console.error("Error loading product variants:", err));
+
     fetch('/api/inventory/return-stock')
       .then(res => res.json())
       .then(data => setReturnHistory(data))
       .catch(err => console.error("Error loading return logs", err));
-  }, []);
+  };
 
-  React.useEffect(() => {
-    if (stock.length > 0 && !returnForm.productId) {
-      setReturnForm(prev => ({ ...prev, productId: stock[0].id }));
-    }
-  }, [stock, returnForm.productId]);
+  useEffect(() => {
+    loadInventoryData();
+  }, []);
 
   const handleReturnStockSubmit = async (e) => {
     e.preventDefault();
@@ -68,22 +160,7 @@ export default function Inventory({ showToast }) {
       const data = await res.json();
       if (res.ok) {
         showToast("Stock return registered. Stock level increased.", "success");
-        // Reload history
-        const histRes = await fetch('/api/inventory/return-stock');
-        const histData = await histRes.json();
-        setReturnHistory(histData);
-        // Update local stock counts
-        setStock(stock.map(item => {
-          if (item.id === returnForm.productId) {
-            const newLevel = item.stockLevel + Number(returnForm.qty);
-            return {
-              ...item,
-              stockLevel: newLevel,
-              status: newLevel <= item.reorderLevel ? (newLevel === 0 ? 'Out of Stock' : 'Low Stock') : 'Normal'
-            };
-          }
-          return item;
-        }));
+        loadInventoryData();
         // Reset form
         setReturnForm({
           productId: stock[0]?.id || '',
@@ -111,8 +188,22 @@ export default function Inventory({ showToast }) {
     ));
   };
 
-  const handleSaveReorder = () => {
-    showToast("Reorder levels saved and sync'd to automation system.", "success");
+  const handleSaveReorder = async () => {
+    try {
+      const promises = stock.map(item => 
+        fetch(`/api/stock-records/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reorder_level: item.reorderLevel })
+        })
+      );
+      await Promise.all(promises);
+      showToast("Reorder levels saved and sync'd to database successfully.", "success");
+      loadInventoryData();
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to save reorder levels.", "error");
+    }
   };
 
   const handleAddWarehouseSubmit = (e) => {
@@ -121,20 +212,98 @@ export default function Inventory({ showToast }) {
       showToast("Please enter warehouse name and address location.", "error");
       return;
     }
-    const newW = {
-      id: `W${whList.length + 1}`,
-      ...newWh
+
+    const selectedEmp = employees.find(emp => (emp.full_name || emp.name) === newWh.manager) || employees[0];
+    const payload = {
+      name: newWh.name,
+      location: newWh.location,
+      manager: selectedEmp?._id,
+      capacity: newWh.capacity || '10,000 SKUs'
     };
-    setWhList([...whList, newW]);
-    setIsAddWhOpen(false);
-    setNewWh({ name: '', location: '', manager: '', capacity: '' });
-    showToast(`Warehouse "${newW.name}" added to logistics nodes.`, "success");
+
+    fetch('/api/warehouses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Warehouse "${newWh.name}" added to logistics nodes.`, "success");
+          setIsAddWhOpen(false);
+          setNewWh({ name: '', location: '', manager: employees[0]?.full_name || '', capacity: '' });
+          loadInventoryData();
+        } else {
+          showToast(resData.message || "Failed to create warehouse.", "error");
+        }
+      })
+      .catch(err => console.error(err));
   };
 
   const handleStockTransferSubmit = (e) => {
     e.preventDefault();
-    showToast(`Stock transfer request created: Dispatched ${transferData.qty} pairs from "${transferData.fromWh}".`, "success");
+    if (transferData.fromWh === transferData.toWh) {
+      showToast("Source and target facilities cannot be the same.", "error");
+      return;
+    }
+    if (!transferData.qty || Number(transferData.qty) <= 0) {
+      showToast("Please enter a valid transfer quantity.", "error");
+      return;
+    }
+
+    const selectedFromWhObj = whList.find(w => w.name === transferData.fromWh) || whList[0];
+    const selectedToWhObj = whList.find(w => w.name === transferData.toWh) || whList[1];
+    const selectedVariantObj = productVariants.find(pv => pv.sku === transferData.product) || productVariants[0];
+
+    if (!selectedFromWhObj || !selectedToWhObj || !selectedVariantObj) {
+      showToast("Please check warehouse and variant details.", "error");
+      return;
+    }
+
+    const cachedUser = localStorage.getItem('huddo_user');
+    const currentUser = cachedUser ? JSON.parse(cachedUser) : null;
+
+    const payload = {
+      from_warehouse: selectedFromWhObj.id,
+      to_warehouse: selectedToWhObj.id,
+      product_variant: selectedVariantObj._id,
+      quantity: Number(transferData.qty),
+      transferred_by: currentUser?._id
+    };
+
+    fetch('/api/stock-transfers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Stock transfer request created: Dispatched ${transferData.qty} pairs of ${transferData.product}.`, "success");
+          setIsRaiseBulkOpen(false);
+          loadInventoryData();
+        } else {
+          showToast(resData.message || "Transfer failed.", "error");
+        }
+      })
+      .catch(err => console.error(err));
   };
+
+  const transferColumns = [
+    { header: "Transfer ID", accessor: "id", render: (val) => <span className="font-bold text-slate-800 font-mono text-[11px]">{val}</span> },
+    { header: "Product Model", accessor: "product", render: (val) => <span className="font-bold text-slate-800 font-display">{val}</span> },
+    { header: "From Facility", accessor: "fromWh" },
+    { header: "To Facility", accessor: "toWh" },
+    { header: "Quantity (Pairs)", accessor: "qty", cellClassName: "text-right font-bold text-slate-900" },
+    { header: "Date Dispatched", accessor: "date" },
+    { header: "Status", accessor: "status", render: (val) => (
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+        val === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+      }`}>
+        {val}
+      </span>
+    )}
+  ];
 
   // Low stock filters
   const lowStockItems = stock.filter(item => item.stockLevel <= item.reorderLevel);
@@ -242,341 +411,281 @@ export default function Inventory({ showToast }) {
               <span>Save Reorder Levels</span>
             </button>
           )}
-          {activeTab === 'warehouses' && (
-            <button 
-              onClick={() => setIsAddWhOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-lg text-xs font-bold transition-all shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Facility</span>
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-200 overflow-x-auto">
+      {/* Tabs Navigation */}
+      <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveTab('stock')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'stock' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'stock' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Stock Ledger Directory
+          Warehouse Stock Ledger ({stock.length})
         </button>
         <button 
           onClick={() => setActiveTab('alerts')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'alerts' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'alerts' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
           Low Stock Alerts ({lowStockItems.length})
         </button>
         <button 
           onClick={() => setActiveTab('transfer')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'transfer' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'transfer' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Stock Transfer Form
+          Facility Stock Transfers ({transferHistory.length})
         </button>
         <button 
           onClick={() => setActiveTab('warehouses')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'warehouses' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'warehouses' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Warehouse Facilities ({whList.length})
+          Logistics Facilities ({whList.length})
         </button>
         <button 
           onClick={() => setActiveTab('returns')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'returns' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'returns' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-          Return Stock Workflow
-        </button>
-        <button 
-          onClick={() => setActiveTab('reports')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${activeTab === 'reports' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-        >
-          Inventory Analytics Charts
+          Stock Returns Queue ({returnHistory.length})
         </button>
       </div>
 
-      {/* Tab Contents */}
-      {activeTab === 'stock' && (
+      {/* Control bar */}
+      {(activeTab === 'warehouses' || activeTab === 'transfer') && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-wrap gap-2 items-center justify-between">
+          <span className="text-xs text-slate-400 font-bold">Options</span>
+          {activeTab === 'warehouses' ? (
+            <button 
+              onClick={() => setIsAddWhOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white rounded text-xs font-bold transition-all shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Facility Node</span>
+            </button>
+          ) : (
+            <button 
+              onClick={() => setIsRaiseBulkOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white rounded text-xs font-bold transition-all shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Raise Transfer Request</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Contents */}
+      {activeTab === 'stock' ? (
         <DataTable 
           columns={stockColumns} 
           data={stock} 
           searchKeys={["name", "sku", "warehouse"]}
-          searchPlaceholder="Search inventory by model, SKU or warehouse..."
+          searchPlaceholder="Search warehouse stock ledger..."
         />
-      )}
-
-      {activeTab === 'alerts' && (
-        <div className="space-y-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex justify-between items-center">
-            <span className="text-xs font-semibold text-slate-600">{lowStockItems.length} items currently below reorder levels.</span>
-            <button 
-              onClick={() => showToast("Simulated Bulk Purchase Order raised for low stock items.", "success")}
-              className="px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white rounded text-xs font-bold"
-            >
-              Raise Bulk Purchase Order
-            </button>
-          </div>
-
-          <DataTable 
-            columns={stockColumns} 
-            data={lowStockItems} 
-            searchKeys={["name", "sku"]}
-            searchPlaceholder="Search low stock..."
-          />
-        </div>
-      )}
-
-      {activeTab === 'warehouses' && (
+      ) : activeTab === 'alerts' ? (
+        <DataTable 
+          columns={stockColumns} 
+          data={lowStockItems} 
+          searchKeys={["name", "sku", "warehouse"]}
+          searchPlaceholder="Search alert items..."
+        />
+      ) : activeTab === 'transfer' ? (
+        <DataTable 
+          columns={transferColumns} 
+          data={transferHistory} 
+          searchKeys={["id", "product", "fromWh", "toWh"]}
+          searchPlaceholder="Search stock transfers..."
+        />
+      ) : activeTab === 'warehouses' ? (
         <DataTable 
           columns={whColumns} 
           data={whList} 
           searchKeys={["name", "location", "manager"]}
-          searchPlaceholder="Search facilities..."
+          searchPlaceholder="Search warehouses..."
         />
-      )}
-
-      {activeTab === 'transfer' && (
-        <form onSubmit={handleStockTransferSubmit} className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs max-w-xl space-y-4">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 font-display">Inter-Warehouse Stock Transfer</h3>
-            <p className="text-xs text-slate-400 font-semibold mt-0.5">Dispatches batch models between regional warehouses nodes.</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">From Facility Source *</label>
-              <select 
-                value={transferData.fromWh} 
-                onChange={(e) => setTransferData({ ...transferData, fromWh: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
-              >
-                {whList.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">To Facility Target *</label>
-              <select 
-                value={transferData.toWh} 
-                onChange={(e) => setTransferData({ ...transferData, toWh: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
-              >
-                {whList.map(w => <option key={w.id} value={w.name}>{w.name}</option>)}
-              </select>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6 text-left">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-900 font-display">Stock Returns Ledger Queue</h3>
+              <p className="text-xs text-slate-400 font-semibold font-sans">Process customer returns and defective shipments stock updates.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Footwear Model *</label>
-              <select 
-                value={transferData.product} 
-                onChange={(e) => setTransferData({ ...transferData, product: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
-              >
-                <option value="Huddo Air Classic">Huddo Air Classic</option>
-                <option value="Huddo Flex Runner">Huddo Flex Runner</option>
-                <option value="Huddo Elegant Derby">Huddo Elegant Derby</option>
-              </select>
-            </div>
+          <form onSubmit={handleReturnStockSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-slate-50/50 p-4 rounded-xl border border-slate-150">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity (Pairs) *</label>
-              <input 
-                type="number" 
-                value={transferData.qty} 
-                onChange={(e) => setTransferData({ ...transferData, qty: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit"
-            className="px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-lg text-xs font-bold transition-all shadow-xs"
-          >
-            Dispatch Transfer Order
-          </button>
-        </form>
-      )}
-
-      {activeTab === 'returns' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Return stock form */}
-          <form onSubmit={handleReturnStockSubmit} className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4 h-fit">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 font-display">Register Stock Return</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Increases product inventory count and logs reference tracking details.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Footwear SKU *</label>
-              <select 
-                value={returnForm.productId} 
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Return Product SKU</label>
+              <select
+                value={returnForm.productId}
                 onChange={(e) => setReturnForm({ ...returnForm, productId: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
+                className="w-full text-xs border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800"
               >
                 {stock.map(item => (
-                  <option key={item.id} value={item.id}>{item.name} ({item.sku})</option>
+                  <option key={item.id} value={item.id}>{item.sku} — {item.name}</option>
                 ))}
               </select>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity (Pairs) *</label>
-                <input 
-                  type="number" 
-                  value={returnForm.qty} 
-                  onChange={(e) => setReturnForm({ ...returnForm, qty: e.target.value })}
-                  placeholder="e.g. 10"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
-                  min="1"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Return Reason *</label>
-                <select 
-                  value={returnForm.reason} 
-                  onChange={(e) => setReturnForm({ ...returnForm, reason: e.target.value })}
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white focus:outline-none"
-                >
-                  <option value="Defective Product">Defective Product</option>
-                  <option value="Size Misalignment">Size Misalignment</option>
-                  <option value="Cancel Order">Cancel Order</option>
-                  <option value="Overstock Return">Overstock Return</option>
-                </select>
-              </div>
-            </div>
-
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reference No. (Invoice / Order)</label>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Return Pairs Count</label>
               <input 
-                type="text" 
-                value={returnForm.refNo} 
-                onChange={(e) => setReturnForm({ ...returnForm, refNo: e.target.value })}
-                placeholder="e.g. INV-2026-001" 
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
+                type="number"
+                value={returnForm.qty}
+                onChange={(e) => setReturnForm({ ...returnForm, qty: e.target.value })}
+                placeholder="Pairs count"
+                className="w-full text-xs border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800"
               />
             </div>
-
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Additional Notes</label>
-              <textarea 
-                rows="2" 
-                value={returnForm.notes} 
-                onChange={(e) => setReturnForm({ ...returnForm, notes: e.target.value })}
-                placeholder="Detailed explanation..." 
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none" 
-              />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Reason / Status</label>
+              <select
+                value={returnForm.reason}
+                onChange={(e) => setReturnForm({ ...returnForm, reason: e.target.value })}
+                className="w-full text-xs border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800"
+              >
+                <option value="Defective Product">Defective Product (Damaged Sole)</option>
+                <option value="Wrong Size Ordered">Wrong Size Mapped</option>
+                <option value="Customer Return">Customer Return (Sale Refund)</option>
+              </select>
             </div>
-
             <button 
               type="submit"
-              className="w-full py-2 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+              className="py-2.5 px-4 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded-lg shadow-sm"
             >
-              Submit Return Stock
+              Log Return Stock
             </button>
           </form>
 
-          {/* Return History table */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs lg:col-span-2 space-y-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 font-display">Returned Stock History Logs</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Audit log of all processed stock return transactions.</p>
-            </div>
-            <DataTable 
-              columns={[
-                { header: "Log ID", accessor: "id", render: (val) => <span className="font-bold text-slate-800 font-mono">{val}</span> },
-                { header: "Product Name", accessor: "productName", render: (val) => <span className="font-bold text-slate-800 font-display text-[11px]">{val}</span> },
-                { header: "SKU", accessor: "sku", render: (val) => <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[9px] text-slate-600 font-bold">{val}</code> },
-                { header: "Qty", accessor: "quantity", render: (val) => <span className="font-bold text-emerald-600">+{val}</span> },
-                { header: "Reason", accessor: "reason" },
-                { header: "Reference ID", accessor: "reference_no" },
-                { header: "Return Date", accessor: "created_at", render: (val) => <span>{new Date(val).toLocaleDateString()}</span> }
-              ]} 
-              data={returnHistory} 
-              searchKeys={["id", "productName", "sku", "reason", "reference_no"]} 
-              searchPlaceholder="Search return log history..."
-            />
-          </div>
+          <DataTable 
+            columns={[
+              { header: "Return ID", accessor: "_id", render: (val) => <span className="font-bold text-slate-800 font-mono">{val}</span> },
+              { header: "Product Variant", accessor: "product_id", render: (val) => {
+                const target = stock.find(item => item.id === val);
+                return <span className="font-bold text-slate-800">{target?.sku || val}</span>;
+              }},
+              { header: "Quantity Returned", accessor: "quantity", render: (val) => <span className="font-bold text-rose-600">+{val} pairs</span> },
+              { header: "Reason", accessor: "reason" },
+              { header: "Notes", accessor: "notes" },
+              { header: "Returned By", accessor: "returned_by" },
+              { header: "Timestamp", accessor: "createdAt", render: (val) => <span>{new Date(val).toLocaleString()}</span> }
+            ]} 
+            data={returnHistory} 
+            searchKeys={["reason", "notes"]}
+            searchPlaceholder="Search returned logs history..."
+          />
         </div>
       )}
 
-      {activeTab === 'reports' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
-          <h3 className="text-sm font-bold text-slate-900 font-display">Daily Inbound vs Outbound Stock Movement</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockStockMovement} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="day" fontSize={11} stroke="#94a3b8" />
-                <YAxis fontSize={11} stroke="#94a3b8" />
-                <Tooltip />
-                <Area type="monotone" dataKey="in" stroke="#10b981" fillOpacity={1} fill="url(#colorIn)" name="Inbound Stock" strokeWidth={2} />
-                <Area type="monotone" dataKey="out" stroke="#ef4444" fillOpacity={1} fill="url(#colorOut)" name="Outbound Dispatch" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Add Warehouse Facility Modal */}
+      {/* Add Warehouse Modal */}
       <Modal
         isOpen={isAddWhOpen}
         onClose={() => setIsAddWhOpen(false)}
-        title="Register Warehouse Facility"
+        title="Add Facility Node"
         onConfirm={handleAddWarehouseSubmit}
       >
-        <form className="space-y-4">
+        <form className="space-y-4 text-left">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Facility Name *</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Warehouse Name *</label>
             <input 
               type="text" 
-              placeholder="e.g., Pune Depot Whse" 
+              placeholder="e.g., Chennai Regional Whse"
               value={newWh.name}
-              onChange={(e) => setNewWh({ ...newWh, name: e.target.value })}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
+              onChange={(e) => setNewWh({...newWh, name: e.target.value})}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Address Location *</label>
+            <input 
+              type="text" 
+              placeholder="e.g. Bhiwandi, Maharashtra"
+              value={newWh.location}
+              onChange={(e) => setNewWh({...newWh, location: e.target.value})}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Facility Head / Manager</label>
-              <input 
-                type="text" 
-                placeholder="e.g., Sanjay Joshi" 
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Facility Manager</label>
+              <select
                 value={newWh.manager}
-                onChange={(e) => setNewWh({ ...newWh, manager: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
-              />
+                onChange={(e) => setNewWh({...newWh, manager: e.target.value})}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none"
+              >
+                {employees.map(emp => (
+                  <option key={emp._id} value={emp.full_name || emp.name}>{emp.full_name || emp.name}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Inventory Capacity</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Max Capacity</label>
               <input 
                 type="text" 
-                placeholder="e.g., 6,000 SKUs" 
+                placeholder="e.g. 15,000 SKUs"
                 value={newWh.capacity}
-                onChange={(e) => setNewWh({ ...newWh, capacity: e.target.value })}
-                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
+                onChange={(e) => setNewWh({...newWh, capacity: e.target.value})}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
               />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Facility Address Location *</label>
-            <textarea 
-              rows="2" 
-              placeholder="e.g., Pune-Bangalore highway, GIDC, Pune" 
-              value={newWh.location}
-              onChange={(e) => setNewWh({ ...newWh, location: e.target.value })}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
-            />
+        </form>
+      </Modal>
+
+      {/* Stock Transfer Request Modal */}
+      <Modal
+        isOpen={isRaiseBulkOpen}
+        onClose={() => setIsRaiseBulkOpen(false)}
+        title="Raise Facility Stock Transfer Request"
+        onConfirm={handleStockTransferSubmit}
+      >
+        <form className="space-y-4 text-left">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Source Facility (From) *</label>
+              <select
+                value={transferData.fromWh}
+                onChange={(e) => setTransferData({...transferData, fromWh: e.target.value})}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none"
+              >
+                {whList.map(w => (
+                  <option key={w.id} value={w.name}>{w.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Facility (To) *</label>
+              <select
+                value={transferData.toWh}
+                onChange={(e) => setTransferData({...transferData, toWh: e.target.value})}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none"
+              >
+                {whList.map(w => (
+                  <option key={w.id} value={w.name}>{w.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Footwear Product SKU *</label>
+              <select
+                value={transferData.product}
+                onChange={(e) => setTransferData({...transferData, product: e.target.value})}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none"
+              >
+                {productVariants.map(pv => (
+                  <option key={pv._id} value={pv.sku}>{pv.sku} — {pv.product?.name || 'Variant'}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity Received (Pairs) *</label>
+              <input 
+                type="number" 
+                value={transferData.qty}
+                onChange={(e) => setTransferData({...transferData, qty: e.target.value})}
+                className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none bg-white text-slate-800"
+                required
+              />
+            </div>
           </div>
         </form>
       </Modal>

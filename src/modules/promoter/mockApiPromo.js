@@ -135,8 +135,8 @@ if (localRetailers.length > 0 && !localRetailers[0].hasOwnProperty('assigned_pro
   localStorage.setItem('huddo_retailers', JSON.stringify(localRetailers));
 }
 
-// PROMO-MODULE: Helper to strip allocated territory fields
-function stripTerritory(promoter) {
+// PROMO-MODULE: Helper to strip allocated geographic fields
+function stripGeographicFields(promoter) {
   if (!promoter) return promoter;
   const copy = { ...promoter };
   delete copy.allocated_country_id;
@@ -278,7 +278,7 @@ export async function handlePromoterApi(pathname, method, body, params) {
 
   // 2. GET /api/promoters
   if (pathname === '/api/promoters' && method === 'GET') {
-    // Return list of promoters - NEVER include territory fields (strip them)
+    // Return list of promoters - NEVER include geographic fields (strip them)
     let filtered = [...promoters];
     if (params.search) {
       const q = params.search.toLowerCase();
@@ -460,12 +460,12 @@ export async function handlePromoterApi(pathname, method, body, params) {
     const promoter = promoters[promoterIndex];
 
     if (method === 'GET') {
-      // PROMO-MODULE: Strip territory fields from response
-      return jsonResponse(stripTerritory(promoter));
+      // PROMO-MODULE: Strip geographic fields from response
+      return jsonResponse(stripGeographicFields(promoter));
     }
 
     if (method === 'PUT') {
-      // PROMO-MODULE: Update updatable fields, store territory, return stripped response
+      // PROMO-MODULE: Update updatable fields, store geographic data, return stripped response
       const updated = {
         ...promoter,
         ...body,
@@ -473,7 +473,7 @@ export async function handlePromoterApi(pathname, method, body, params) {
       };
       promoters[promoterIndex] = updated;
       saveAll();
-      return jsonResponse({ updated: true, promoter: stripTerritory(updated) });
+      return jsonResponse({ updated: true, promoter: stripGeographicFields(updated) });
     }
 
     if (method === 'DELETE') {
@@ -1284,7 +1284,7 @@ export async function handlePromoterApi(pathname, method, body, params) {
     const paidPct = totalEarned > 0 ? (totalPaid / totalEarned) * 100 : 100;
 
     return jsonResponse({
-      profile_snapshot: stripTerritory(promoter),
+      profile_snapshot: stripGeographicFields(promoter),
       summary_cards: {
         retailers_added: mapped.length,
         active_retailers: mapped.length,

@@ -5,13 +5,14 @@ import {
   CreditCard, TrendingUp, Archive, RefreshCw, AlertTriangle, 
   BarChart3, CheckSquare, ShoppingBag, Menu, X, ChevronLeft, ChevronRight, Settings, LogOut
 } from 'lucide-react';
+import { DashboardLayout } from '../../components/DesignSystem';
 
 // Import Context
 import { EmployeeAuthProvider, useEmployeeAuth } from './context/EmployeeAuthContext';
 
 // Import Pages
 import Dashboard from './pages/Dashboard';
-import Profile from './pages/Profile';
+import Profile from '../MyProfile';
 import Attendance from './pages/Attendance';
 import Leave from './pages/Leave';
 import Orders from './pages/Orders';
@@ -168,7 +169,7 @@ function EmployeeWorkspace({ userRole, showToast, onSwitchRole }) {
       case 'Dashboard':
         return <Dashboard onNavigate={setActiveTab} showToast={showToast} />;
       case 'Profile':
-        return <Profile showToast={showToast} />;
+        return <Profile showToast={showToast} userRole={userRole} onSwitchRole={onSwitchRole} />;
       case 'Attendance':
         return <Attendance showToast={showToast} />;
       case 'Leave':
@@ -254,197 +255,22 @@ function EmployeeWorkspace({ userRole, showToast, onSwitchRole }) {
   }[activeRole] || "Sales Executive";
 
   return (
-    <div className="min-h-screen flex bg-slate-50 relative font-sans antialiased text-slate-800 w-full employee-workspace">
-      
-      {/* 1. Sidebar */}
-      <aside 
-        className={`bg-slate-900 text-slate-350 h-screen sticky top-0 flex flex-col justify-between transition-all duration-300 z-30 shrink-0 ${
-          sidebarCollapsed ? 'w-[64px]' : 'w-[256px]'
-        } ${mobileSidebarOpen ? 'fixed inset-y-0 left-0 z-50 bg-slate-900 w-[256px] block' : 'hidden lg:flex'}`}
-      >
-        <div>
-          {/* Brand header */}
-          <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800">
-            {(!sidebarCollapsed || mobileSidebarOpen) && (
-              <div className="flex items-center gap-2">
-                <span className="w-8 h-8 rounded-lg bg-brand-orange flex items-center justify-center font-bold text-white font-display text-base shadow-md">H</span>
-                <span className="font-extrabold text-base tracking-wider text-white font-display">HUDDO PANEL</span>
-              </div>
-            )}
-            {sidebarCollapsed && !mobileSidebarOpen && (
-              <span className="w-8 h-8 mx-auto rounded-lg bg-brand-orange flex items-center justify-center font-extrabold text-white font-display text-sm">H</span>
-            )}
-            {mobileSidebarOpen && (
-              <button 
-                className="lg:hidden p-1 text-slate-400 hover:text-white cursor-pointer" 
-                onClick={() => setMobileSidebarOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Roster items */}
-          <nav className="p-3 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
-            <div className="space-y-1">
-              {(!sidebarCollapsed || mobileSidebarOpen) ? (
-                <span className="block text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3 py-1.5">Employee Workspace</span>
-              ) : (
-                <div className="border-t border-slate-800/80 my-2"></div>
-              )}
-
-              {navItems.map(item => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setMobileSidebarOpen(false);
-                    }}
-                    title={sidebarCollapsed ? item.label : undefined}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all relative cursor-pointer ${
-                      isActive 
-                        ? 'bg-brand-orange text-white shadow-md' 
-                        : 'hover:bg-slate-800 hover:text-white text-slate-450'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className="w-4 h-4 shrink-0" />
-                      {(!sidebarCollapsed || mobileSidebarOpen) && <span>{item.label}</span>}
-                    </div>
-                    {isActive && (!sidebarCollapsed || mobileSidebarOpen) && (
-                      <span className="absolute right-2 w-1.5 h-1.5 bg-white rounded-full"></span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-        </div>
-
-        {/* Sidebar collapse button */}
-        <div className="p-3 border-t border-slate-805 flex justify-center">
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-          >
-            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
-        </div>
-      </aside>
-
-      {/* 2. Topbar + Main canvas */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Topbar header controls */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs select-none">
-          {/* Breadcrumb path */}
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-            <span className="hover:text-slate-650">HUDDO ERP</span>
-            <span>/</span>
-            <span className="hover:text-slate-655 uppercase tracking-wider">{currentRoleLabel}</span>
-            <span>/</span>
-            <span className="text-slate-700 font-extrabold uppercase tracking-wider">{activeTab}</span>
-          </div>
-
-          {/* Right Controls */}
-          <div className="flex items-center gap-4">
-            
-            {/* DEV TOOL switcher dropdown */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg p-1.5 text-[10px] font-extrabold select-none">
-              <span className="text-slate-400 uppercase tracking-wider">Dev: Switch Role</span>
-              <select
-                value={currentRoleLabel}
-                onChange={(e) => handleDevRoleChange(e.target.value)}
-                className="border-0 bg-transparent font-extrabold text-brand-orange focus:outline-none cursor-pointer"
-              >
-                <option value="Sales Executive">Sales Executive</option>
-                <option value="Sales Manager">Sales Manager</option>
-                <option value="HR Manager">HR Manager</option>
-                <option value="Finance Manager">Finance Manager</option>
-                <option value="Inventory Manager">Inventory Manager</option>
-                <option value="Purchase Manager">Purchase Manager</option>
-                <option value="Team Member">Team Member</option>
-              </select>
-            </div>
-
-            {/* Mobile Sidebar toggle */}
-            <button
-              onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-500 cursor-pointer"
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-
-            {/* Notification bell badge */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsNotifOpen(!isNotifOpen)}
-                className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-all cursor-pointer relative"
-              >
-                <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-brand-orange border-2 border-white rounded-full flex items-center justify-center text-[7px] text-white"></span>
-                )}
-              </button>
-
-              {/* Notification feed dropdown */}
-              {isNotifOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-55 p-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
-                    <span className="text-xs font-bold text-slate-800 font-display">Notifications Hub</span>
-                    {unreadCount > 0 && (
-                      <button 
-                        onClick={handleMarkAllRead}
-                        className="text-[10px] text-brand-orange font-bold hover:underline cursor-pointer"
-                      >
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1 text-xs">
-                    {notifications.map((n, idx) => (
-                      <div 
-                        key={idx} 
-                        onClick={() => handleMarkAsRead(n.id)}
-                        className={`border-b border-slate-50 pb-2 last:border-b-0 cursor-pointer hover:bg-slate-50/50 p-1 rounded transition-colors ${!n.read ? 'bg-orange-50/10 border-l-2 border-l-brand-orange pl-1.5' : ''}`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <span className="font-bold text-slate-850 block">{n.title}</span>
-                          {!n.read && <span className="w-1.5 h-1.5 bg-brand-orange rounded-full"></span>}
-                        </div>
-                        <p className="text-slate-400 mt-0.5 font-medium leading-relaxed">{n.message}</p>
-                        <span className="text-[9px] text-slate-400 font-bold block mt-1">{n.date} - {n.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Profile trigger linking back to Admin */}
-            <button 
-              onClick={() => onSwitchRole && onSwitchRole('Founder')}
-              className="px-3.5 py-1.5 border border-slate-205 hover:bg-rose-50 hover:text-rose-600 rounded-lg text-xs font-bold text-slate-650 transition-all cursor-pointer flex items-center gap-1"
-              title="Logout session to admin panel"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Logout Session</span>
-            </button>
-
-          </div>
-        </header>
-
-        {/* 3. Main canvas area */}
-        <main className="p-6 overflow-y-auto flex-1 max-w-[1600px] w-full mx-auto">
-          {renderActiveScreen()}
-        </main>
-      </div>
-
-    </div>
+    <DashboardLayout
+      userRole={currentRoleLabel}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      sidebarItems={navItems}
+      onSwitchRole={onSwitchRole}
+      notifications={notifications.map(n => ({ id: n.id, title: n.title, message: n.message, read: n.read, date: `${n.date} ${n.time}` }))}
+      onMarkAllNotificationsRead={handleMarkAllRead}
+      profile={{
+        name: currentEmployee?.name || 'Employee User',
+        subtitle: currentEmployee?.designation || currentRoleLabel,
+        image: null
+      }}
+    >
+      {renderActiveScreen()}
+    </DashboardLayout>
   );
 }
 

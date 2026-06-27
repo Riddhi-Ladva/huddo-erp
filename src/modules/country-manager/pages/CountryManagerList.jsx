@@ -154,7 +154,7 @@ export default function CountryManagerList({ onNavigate, showToast }) {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 font-display">Country Managers</h1>
-          <p className="text-sm text-slate-500">Add new regional directors, scope territorial configurations, and monitor country operations.</p>
+          <p className="text-sm text-slate-500">Add new regional directors, scope country configurations, and monitor country operations.</p>
         </div>
         <button
           onClick={() => onNavigate("add")}

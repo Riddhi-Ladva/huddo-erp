@@ -1,8 +1,12 @@
-// src/city-manager/CityManagerModule.jsx
 import { useState, useEffect, useRef } from 'react';
+import { 
+  Home, Store, UserPlus, Clock, ShoppingCart, CheckSquare, 
+  MapPin, Lightbulb, Award, TrendingUp, Target, Percent, BarChart3, Bell
+} from 'lucide-react';
 
 // Import Layout
-import CityManagerLayout from './components/CityManagerLayout';
+import { DashboardLayout } from '../components/DesignSystem';
+import MyProfile from '../modules/MyProfile';
 import { Toast, SkeletonLoader } from './components/Common';
 import { formatCurrency } from './cityManagerUtils';
 
@@ -434,6 +438,9 @@ export default function CityManagerModule({ showToast: parentShowToast, onSwitch
 
   // Render tab contents
   const renderActiveTab = () => {
+    if (activeTab === 'Profile') {
+      return <MyProfile showToast={showToast} userRole="City Manager" onSwitchRole={onSwitchRole} />;
+    }
     switch (activeTab) {
       case 'Dashboard':
         return (
@@ -600,7 +607,22 @@ export default function CityManagerModule({ showToast: parentShowToast, onSwitch
           />
         );
       default:
-        return <div className="p-8 text-center text-xs font-semibold text-slate-400">Section coming soon!</div>;
+        return (
+          <Dashboard
+            retailers={retailers}
+            orders={orders}
+            pendingApprovals={pendingApprovals}
+            visitLogs={visitLogs}
+            monthlyRevenueData={monthlyRevenueData}
+            retailerSalesData={retailerSalesData}
+            onApprove={handleApproveApproval}
+            onReject={(id) => {
+              handleTabChange('Approvals');
+              showToast(`Review pending items to reject ID ${id}`, 'info');
+            }}
+            onNavigate={handleTabChange}
+          />
+        );
     }
   };
 
@@ -608,16 +630,72 @@ export default function CityManagerModule({ showToast: parentShowToast, onSwitch
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
   const pendingRetailersCount = retailers.filter(r => r.status === 'Pending Verification').length;
 
+  const SIDEBAR_ITEMS = [
+    {
+      section: "OVERVIEW",
+      items: [
+        { id: "Dashboard", label: "Dashboard", icon: Home }
+      ]
+    },
+    {
+      section: "RETAILERS",
+      items: [
+        { id: "My Retailers", label: "My Retailers", icon: Store },
+        { id: "Onboard Retailer", label: "Onboard Retailer", icon: UserPlus },
+        { id: "Pending Verification", label: "Pending Verification", icon: Clock, badge: pendingRetailersCount }
+      ]
+    },
+    {
+      section: "OPERATIONS",
+      items: [
+        { id: "Orders", label: "Orders", icon: ShoppingCart },
+        { id: "Approvals", label: "Approvals", icon: CheckSquare, badge: pendingApprovalsCount }
+      ]
+    },
+    {
+      section: "FIELD WORK",
+      items: [
+        { id: "Visit Logs", label: "Visit Logs", icon: MapPin },
+        { id: "Market Leads", label: "Market Leads", icon: Lightbulb }
+      ]
+    },
+    {
+      section: "PROMOTERS",
+      items: [
+        { id: "Promoter View", label: "Promoter View", icon: Award }
+      ]
+    },
+    {
+      section: "PERFORMANCE",
+      items: [
+        { id: "Sales Monitoring", label: "Sales Monitoring", icon: TrendingUp },
+        { id: "Targets", label: "Targets", icon: Target },
+        { id: "My Incentive", label: "My Incentive", icon: Percent }
+      ]
+    },
+    {
+      section: "REPORTS",
+      items: [
+        { id: "Reports", label: "Reports", icon: BarChart3 },
+        { id: "Notifications", label: "Notifications", icon: Bell, badge: unreadNotificationsCount }
+      ]
+    }
+  ];
+
   return (
-    <CityManagerLayout
+    <DashboardLayout
+      userRole="City Manager"
       activeTab={activeTab}
       setActiveTab={handleTabChange}
-      pendingApprovalsCount={pendingApprovalsCount}
-      unreadNotificationsCount={unreadNotificationsCount}
-      pendingRetailersCount={pendingRetailersCount}
+      sidebarItems={SIDEBAR_ITEMS}
       onSwitchRole={onSwitchRole}
-      searchQuery={searchQuery}
-      setSearchQuery={setSearchQuery}
+      notifications={notifications.map(n => ({ id: n.id, title: n.type || 'Alert', message: n.message, read: n.read, date: n.time }))}
+      onMarkAllNotificationsRead={handleMarkAllRead}
+      profile={{
+        name: "Rahul Shinde",
+        subtitle: "Ahmedabad City Manager",
+        image: null
+      }}
     >
       {loading ? (
         <SkeletonLoader type={activeTab === 'Dashboard' ? 'dashboard' : ['My Retailers', 'Pending Verification', 'Orders', 'Approvals', 'Visit Logs', 'Market Leads'].includes(activeTab) ? 'table' : 'cards'} />
@@ -632,6 +710,6 @@ export default function CityManagerModule({ showToast: parentShowToast, onSwitch
           onClose={() => setToast(null)}
         />
       )}
-    </CityManagerLayout>
+    </DashboardLayout>
   );
 }

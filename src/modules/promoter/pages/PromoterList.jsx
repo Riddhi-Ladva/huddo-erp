@@ -1,7 +1,7 @@
 // PROMO-MODULE: Promoter list page implementation with filters, stats cards, and action events.
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Eye, Edit, Trash2, CheckCircle2, UserCheck, UserMinus, ShieldAlert, Download } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, CheckCircle2, UserCheck, UserMinus, ShieldAlert, Download, BarChart2 } from 'lucide-react';
 import { DataTable } from '../../../components/Common';
 import { GEOGRAPHY } from '../../../mockData';
 
@@ -118,15 +118,35 @@ export default function PromoterList({ onNavigate, showToast }) {
     }
   };
 
-  const exportAllPromoters = async () => {
+  const exportAllPromoters = () => {
+    if (!promoters || !promoters.length) {
+      showToast("No promoter data to export.", "error");
+      return;
+    }
     try {
-      const res = await fetch('/api/promoters/reports/all-promoters');
-      if (res.ok) {
-        const data = await res.json();
-        window.open(data.download_url);
-        showToast("Report exported successfully.", "success");
-      }
+      const headers = ["Code ID", "Name", "Mobile", "Email", "Retailers Mapped", "Revenue (Month)", "Earned Royalty (5%)", "Status"];
+      const rows = promoters.map(p => [
+        p.promoter_code || "",
+        p.full_name || "",
+        p.mobile_number || "",
+        p.email || "",
+        `${p.total_retailers_mapped || 0} shops`,
+        `₹${(p.current_month_revenue || 0).toLocaleString('en-IN')}`,
+        `₹${(p.royalty_pending || 0).toLocaleString('en-IN')}`,
+        p.status || "Active"
+      ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(','));
+
+      const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `promoters_export_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Report exported successfully.", "success");
     } catch (err) {
+      console.error("CSV Export error:", err);
       showToast("Export failed.", "error");
     }
   };
@@ -263,6 +283,13 @@ export default function PromoterList({ onNavigate, showToast }) {
           >
             <Download className="w-4 h-4" />
             <span>Export Roster</span>
+          </button>
+          <button 
+            onClick={() => onNavigate('analytics')}
+            className="flex items-center gap-2 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-xs transition-colors"
+          >
+            <BarChart2 className="w-4 h-4" />
+            <span>View Analytics</span>
           </button>
           <button 
             onClick={() => onNavigate('add')}

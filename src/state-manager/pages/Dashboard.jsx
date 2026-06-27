@@ -1,20 +1,24 @@
 // src/state-manager/pages/Dashboard.jsx
+import React from 'react';
 import { 
   TrendingUp, ShoppingCart, Store, Users, CheckSquare, 
   ArrowUpRight, MapPin, Check, X
 } from 'lucide-react';
 import { 
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, 
-  CartesianGrid, Tooltip, Legend, BarChart, Bar
-} from 'recharts';
+  StatWidget, 
+  DashboardCard, 
+  DashboardTable, 
+  DashboardLineChart, 
+  DashboardBarChart 
+} from '../../components/DesignSystem';
 import { formatCurrency, formatNumber } from '../utils';
 
 export default function Dashboard({ 
-  cityManagers, 
-  monthlyRevenueData, 
-  cityPerformanceData, 
-  fieldForceData, 
-  pendingApprovals, 
+  cityManagers = [], 
+  monthlyRevenueData = [], 
+  cityPerformanceData = [], 
+  fieldForceData = [], 
+  pendingApprovals = [], 
   onApprove, 
   onReject, 
   onNavigate 
@@ -26,16 +30,50 @@ export default function Dashboard({
 
   // Render helpers
   const getProgressColor = (pct) => {
+    if (pct >= 90) return 'text-emerald-600 font-bold';
+    if (pct >= 60) return 'text-amber-600 font-bold';
+    return 'text-rose-600 font-bold';
+  };
+
+  const getProgressColorClass = (pct) => {
     if (pct >= 90) return 'bg-emerald-500';
     if (pct >= 60) return 'bg-amber-500';
     return 'bg-rose-500';
   };
 
-  const getProgressTextClass = (pct) => {
-    if (pct >= 90) return 'text-emerald-700 bg-emerald-50';
-    if (pct >= 60) return 'text-amber-700 bg-amber-50';
-    return 'text-rose-700 bg-rose-50';
-  };
+  const tableColumns = [
+    { header: "City", accessor: "city", render: (val) => <span className="font-bold text-slate-800">{val}</span> },
+    { header: "City Manager", accessor: "name" },
+    { header: "Retailers", accessor: "retailersCount" },
+    { header: "Orders", accessor: "ordersThisMonth" },
+    { header: "Target", accessor: "monthlyTarget", cellClassName: "text-right", render: (val) => <span>{formatCurrency(val)}</span> },
+    { header: "Achieved", accessor: "achieved", cellClassName: "text-right font-bold text-slate-800", render: (val) => <span>{formatCurrency(val)}</span> },
+    { header: "Achievement %", accessor: "monthlyTarget", render: (val, row) => {
+      const achievementPct = val > 0 ? Math.round((row.achieved / val) * 100) : 0;
+      return (
+        <div className="flex items-center gap-3">
+          <div className="w-24 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className={`h-full ${getProgressColorClass(achievementPct)} rounded-full`}
+              style={{ width: `${Math.min(achievementPct, 100)}%` }}
+            ></div>
+          </div>
+          <span className={`text-[10px] ${getProgressColor(achievementPct)}`}>
+            {achievementPct}%
+          </span>
+        </div>
+      );
+    }},
+    { header: "Status", accessor: "status", render: (val) => (
+      <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full border ${
+        val === 'Active' 
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+          : 'bg-slate-50 text-slate-500 border-slate-100'
+      }`}>
+        {val}
+      </span>
+    )}
+  ];
 
   return (
     <div className="space-y-6">
@@ -49,7 +87,7 @@ export default function Dashboard({
         <div className="flex items-center gap-3">
           <button 
             onClick={() => onNavigate("Reports")}
-            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-100 transition-all"
+            className="px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
           >
             Generate State Report
           </button>
@@ -58,216 +96,118 @@ export default function Dashboard({
 
       {/* 1. Top Row: 5 KPI stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        
-        {/* KPI 1 */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-bold tracking-wider uppercase">State Revenue (June)</span>
-            <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
-              <TrendingUp className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <h3 className="text-lg font-black text-slate-800">{formatCurrency(1507000)}</h3>
+        <StatWidget 
+          title="State Revenue (June)" 
+          value={formatCurrency(1507000)}
+          delta={
             <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 mt-1">
               <ArrowUpRight className="w-3 h-3" /> +21.5% vs last month
             </span>
-          </div>
-        </div>
-
-        {/* KPI 2 */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-bold tracking-wider uppercase">Total Orders</span>
-            <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
-              <ShoppingCart className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <h3 className="text-lg font-black text-slate-800">{formatNumber(304)}</h3>
-            <span className="text-[10px] font-bold text-blue-600 flex items-center gap-0.5 mt-1">
-              +18 vs last month
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 3 */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-bold tracking-wider uppercase">Total Retailers</span>
-            <div className="p-1.5 bg-purple-50 rounded-lg text-purple-600">
-              <Store className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <h3 className="text-lg font-black text-slate-800">{formatNumber(159)}</h3>
-            <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 mt-1">
-              3 new this month
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 4 */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-bold tracking-wider uppercase">City Managers</span>
-            <div className="p-1.5 bg-teal-50 rounded-lg text-teal-600">
-              <Users className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <h3 className="text-lg font-black text-slate-800">{formatNumber(cityManagers.length)}</h3>
-            <span className="text-[10px] font-bold text-teal-600 flex items-center gap-0.5 mt-1">
-              {activeCityManagers} active today
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 5 */}
-        <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all border-l-4 border-l-orange-500">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-bold tracking-wider uppercase">Pending Approvals</span>
-            <div className="p-1.5 bg-orange-50 rounded-lg text-orange-600">
-              <CheckSquare className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <h3 className="text-lg font-black text-slate-800">{pendingApprovalsCount}</h3>
-            <span className="text-[10px] font-bold text-orange-600 flex items-center gap-0.5 mt-1">
-              Action required
-            </span>
-          </div>
-        </div>
-
+          }
+          icon={TrendingUp}
+          colorClass="text-emerald-600 bg-emerald-50"
+          onClick={() => onNavigate("Sales Monitoring")}
+        />
+        <StatWidget 
+          title="Total Orders" 
+          value={formatNumber(304)}
+          delta="+18 vs last month"
+          icon={ShoppingCart}
+          colorClass="text-blue-600 bg-blue-50"
+          onClick={() => onNavigate("Orders")}
+        />
+        <StatWidget 
+          title="Total Retailers" 
+          value={formatNumber(159)}
+          delta="3 new this month"
+          icon={Store}
+          colorClass="text-purple-600 bg-purple-50"
+          onClick={() => onNavigate("Retailers")}
+        />
+        <StatWidget 
+          title="City Managers" 
+          value={formatNumber(cityManagers.length)}
+          delta={`${activeCityManagers} active today`}
+          icon={Users}
+          colorClass="text-teal-600 bg-teal-50"
+          onClick={() => onNavigate("City Managers")}
+        />
+        <StatWidget 
+          title="Pending Approvals" 
+          value={pendingApprovalsCount}
+          delta="Action required"
+          icon={CheckSquare}
+          colorClass="text-orange-605 bg-orange-50"
+          onClick={() => onNavigate("Approvals")}
+        />
       </div>
 
       {/* 2. Second Row: Charts side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left Chart (60% width on large screens) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
-          <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Monthly Revenue vs Target</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyRevenueData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => `₹${val/100000}L`} />
-                <Tooltip 
-                  formatter={(value) => [formatCurrency(value), '']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} />
-                <Line type="monotone" dataKey="revenue" name="Achieved Revenue" stroke="#ea580c" strokeWidth={3} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="target" name="Monthly Target" stroke="#94a3b8" strokeDasharray="5 5" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <DashboardCard 
+          title="Monthly Revenue vs Target" 
+          subtitle="Revenue trend comparison against target thresholds."
+          className="lg:col-span-7"
+        >
+          <DashboardLineChart 
+            data={monthlyRevenueData}
+            xKey="month"
+            lineKey="revenue"
+            tickFormatter={(val) => `₹${val/100000}L`}
+            formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, 'Revenue']}
+          />
+        </DashboardCard>
 
         {/* Right Chart (40% width on large screens) */}
-        <div className="lg:col-span-5 bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
-          <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">City Performance This Month</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cityPerformanceData} layout="vertical" margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(val) => `₹${val/100000}L`} />
-                <YAxis type="category" dataKey="city" stroke="#94a3b8" fontSize={10} tickLine={false} width={70} />
-                <Tooltip 
-                  formatter={(value) => [formatCurrency(value), '']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} />
-                <Bar dataKey="revenue" name="Achieved" fill="#ea580c" radius={[0, 4, 4, 0]} barSize={10} />
-                <Bar dataKey="target" name="Target" fill="#cbd5e1" radius={[0, 4, 4, 0]} barSize={10} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <DashboardCard 
+          title="City Performance This Month" 
+          subtitle="Ranks active cities target versus achievements."
+          className="lg:col-span-5"
+        >
+          <DashboardBarChart 
+            data={cityPerformanceData}
+            layout="vertical"
+            yKey="city"
+            barKey="revenue"
+            tickFormatter={(val) => `₹${val/100000}L`}
+            formatter={(value) => `₹${value.toLocaleString('en-IN')}`}
+          />
+        </DashboardCard>
 
       </div>
 
       {/* 3. Third Row: City Manager Performance table */}
-      <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-          <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">City Manager Performance</h2>
+      <DashboardCard
+        title="City Manager Performance"
+        subtitle="Operational metrics tracked for all city managers."
+        headerActions={
           <button 
             onClick={() => onNavigate("City Managers")}
-            className="text-[11px] text-orange-600 font-bold hover:underline"
+            className="text-[11px] text-brand-orange font-bold hover:underline cursor-pointer"
           >
             Manage City Managers
           </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 text-[10px] text-slate-400 font-bold tracking-wider uppercase">
-                <th className="py-2.5 px-3">City</th>
-                <th className="py-2.5 px-3">City Manager</th>
-                <th className="py-2.5 px-3">Retailers</th>
-                <th className="py-2.5 px-3">Orders</th>
-                <th className="py-2.5 px-3 text-right">Target</th>
-                <th className="py-2.5 px-3 text-right">Achieved</th>
-                <th className="py-2.5 px-3">Achievement %</th>
-                <th className="py-2.5 px-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="text-xs font-medium text-slate-600 divide-y divide-slate-100">
-              {cityManagers.map((cm) => {
-                const targetVal = cm.monthlyTarget;
-                const achievedVal = cm.achieved;
-                const achievementPct = targetVal > 0 ? Math.round((achievedVal / targetVal) * 100) : 0;
-                
-                return (
-                  <tr key={cm.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 px-3 font-bold text-slate-800">{cm.city}</td>
-                    <td className="py-3 px-3">{cm.name}</td>
-                    <td className="py-3 px-3">{cm.retailersCount}</td>
-                    <td className="py-3 px-3">{cm.ordersThisMonth}</td>
-                    <td className="py-3 px-3 text-right">{formatCurrency(targetVal)}</td>
-                    <td className="py-3 px-3 text-right font-bold text-slate-800">{formatCurrency(achievedVal)}</td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-24 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                          <div 
-                            className={`h-full ${getProgressColor(achievementPct)} rounded-full`}
-                            style={{ width: `${Math.min(achievementPct, 100)}%` }}
-                          ></div>
-                        </div>
-                        <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-extrabold ${getProgressTextClass(achievementPct)}`}>
-                          {achievementPct}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-                        cm.status === 'Active' 
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
-                          : 'bg-slate-50 text-slate-500 border border-slate-100'
-                      }`}>
-                        {cm.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        }
+      >
+        <DashboardTable
+          columns={tableColumns}
+          data={cityManagers}
+        />
+      </DashboardCard>
 
       {/* 4. Fourth Row: Pending Approvals & Field Force Live */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left: Pending Approvals list */}
-        <div className="lg:col-span-7 bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
               <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Pending Approvals</h2>
               <button 
                 onClick={() => onNavigate("Approvals")}
-                className="text-[11px] text-orange-600 font-bold hover:underline"
+                className="text-[11px] text-brand-orange font-bold hover:underline cursor-pointer"
               >
                 View Approvals Queue ({pendingApprovalsCount})
               </button>
@@ -307,14 +247,14 @@ export default function Dashboard({
                       <div className="flex items-center gap-2 self-end sm:self-center">
                         <button 
                           onClick={() => onApprove(app.id)}
-                          className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-100"
+                          className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-100 cursor-pointer"
                           title="Approve Request"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => onReject(app.id)}
-                          className="p-1.5 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-100"
+                          className="p-1.5 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-100 cursor-pointer"
                           title="Reject Request"
                         >
                           <X className="w-4 h-4" />
@@ -336,7 +276,7 @@ export default function Dashboard({
             <div className="text-center pt-2 border-t border-slate-50 mt-2">
               <button 
                 onClick={() => onNavigate("Approvals")}
-                className="text-[11px] text-slate-400 hover:text-slate-600 font-bold"
+                className="text-[11px] text-slate-400 hover:text-slate-605 font-bold cursor-pointer"
               >
                 + {pendingApprovals.length - 3} more pending approvals. Click to view all.
               </button>
@@ -345,12 +285,12 @@ export default function Dashboard({
         </div>
 
         {/* Right: Field Force Live tracker */}
-        <div className="lg:col-span-5 bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
+        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
             <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Field Force Live</h2>
             <button 
               onClick={() => onNavigate("Field Force")}
-              className="text-[11px] text-orange-600 font-bold hover:underline"
+              className="text-[11px] text-brand-orange font-bold hover:underline cursor-pointer"
             >
               Track Details
             </button>
@@ -381,7 +321,7 @@ export default function Dashboard({
                     {ff.status === 'Active' ? 'Clocked In' : 'Not Clocked In'}
                   </span>
                   {ff.status === 'Active' && (
-                    <p className="text-[10px] text-slate-500 font-bold">{ff.todayVisits} visits | {ff.distanceKm} km</p>
+                    <p className="text-[10px] text-slate-555 font-bold">{ff.todayVisits} visits | {ff.distanceKm} km</p>
                   )}
                 </div>
               </div>

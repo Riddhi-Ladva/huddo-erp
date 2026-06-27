@@ -1,19 +1,13 @@
-// HUDDO-UPDATE: Purchase — Barcode sticker generation & Mobile scanner (Phase 2 early implementation)
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, QrCode, Plus, Eye, Printer, Scan, AlertTriangle, ShieldCheck, Camera, Laptop } from 'lucide-react';
-import { initialProducts, initialInventory } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export default function Purchase({ showToast }) {
-  const [purchaseEntries, setPurchaseEntries] = useState([
-    { id: "PO-2026-001", name: "Huddo Air Classic", sku: "HDO-AC-RD-08", article_no: "ART-AC-01", colour: "Red", qty: 250, vendor: "Standard Sole Manufacturers", date: "2026-06-05", status: "Confirmed" },
-    { id: "PO-2026-002", name: "Huddo Flex Runner", sku: "HDO-FR-GR-09", article_no: "ART-FR-02", colour: "Grey", qty: 120, vendor: "Comfort Rubber Ltd", date: "2026-06-08", status: "Confirmed" },
-    { id: "PO-2026-003", name: "Huddo Elegant Derby", sku: "HDO-ED-BK-10", article_no: "ART-ED-03", colour: "Brown", qty: 80, vendor: "Derby Leather Tannery", date: "2026-06-10", status: "Draft" }
-  ]);
-
-  const [productsList, setProductsList] = useState(initialProducts);
-  const [stock, setStock] = useState(initialInventory);
+  const [purchaseEntries, setPurchaseEntries] = useState([]);
+  const [productsList, setProductsList] = useState([]);
+  const [stock, setStock] = useState([]);
+  const [vendors, setVendors] = useState([]);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -27,11 +21,91 @@ export default function Purchase({ showToast }) {
   });
   
   const [qrForm, setQrForm] = useState({
-    product_id: initialInventory[0]?.id || '',
+    product_id: '',
     quantity: '',
     reference_id: '',
     notes: ''
   });
+
+  const mapPurchaseOrder = (po) => {
+    const firstItem = po.items?.[0] || {};
+    return {
+      id: po.po_number || po._id,
+      _id: po._id,
+      name: firstItem.item_name || 'Footwear Model',
+      sku: po.sku || 'HDO-AC-RD-08',
+      article_no: po.article_no || 'ART-AC-01',
+      colour: po.colour || 'Red',
+      qty: firstItem.quantity || po.qty || 100,
+      vendor: po.vendor?.name || po.vendor || 'Standard Sole Manufacturers',
+      date: po.createdAt ? new Date(po.createdAt).toISOString().split('T')[0] : '2026-06-08',
+      status: po.status || 'Confirmed'
+    };
+  };
+
+  const mapStock = (s) => ({
+    id: s._id,
+    sku: s.product_variant?.sku || s.sku || 'HDO-AC-RD-08',
+    stockLevel: s.quantity || s.stockLevel || 0,
+    warehouse: s.warehouse?.name || s.warehouse || 'Mumbai Central Whse',
+    reorderLevel: s.reorder_level || 50,
+    status: (s.quantity || s.stockLevel) <= (s.reorder_level || 50) ? 'Low Stock' : 'Normal'
+  });
+
+  const loadPurchaseData = () => {
+    fetch('/api/purchase-orders')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setPurchaseEntries(resData.data.map(mapPurchaseOrder));
+        }
+      })
+      .catch(err => console.error("Error loading purchase orders:", err));
+
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setProductsList(resData.data.map(p => ({
+            id: p._id,
+            name: p.name,
+            sku: p.sku || 'HDO-AC-RD-08',
+            article_no: p.article_no || 'ART-AC-01',
+            colour: p.colour || 'Red'
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading products:", err));
+
+    fetch('/api/stock-records')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(mapStock);
+          setStock(mapped);
+          if (mapped.length > 0) {
+            setQrForm(prev => ({ ...prev, product_id: mapped[0].id }));
+          }
+        }
+      })
+      .catch(err => console.error("Error loading stocks:", err));
+
+    fetch('/api/vendors')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          setVendors(resData.data);
+          if (resData.data.length > 0) {
+            setNewEntry(prev => ({ ...prev, vendor: resData.data[0].name }));
+          }
+        }
+      })
+      .catch(err => console.error("Error loading vendors:", err));
+  };
+
+  useEffect(() => {
+    loadPurchaseData();
+  }, []);
 
   // Print Barcode Sticker layout
   const handlePrintBarcode = (item) => {
@@ -100,36 +174,55 @@ export default function Purchase({ showToast }) {
       return;
     }
 
-    const created = {
-      id: `PO-2026-${String(purchaseEntries.length + 1).padStart(3, '0')}`,
-      name: newEntry.name,
-      sku: newEntry.sku,
-      article_no: newEntry.article_no || "N/A",
-      colour: newEntry.colour || "N/A",
-      qty: Number(newEntry.qty),
-      vendor: newEntry.vendor,
-      date: new Date().toISOString().split('T')[0],
+    const selectedVendorObj = vendors.find(v => v.name === newEntry.vendor) || vendors[0];
+    if (!selectedVendorObj) {
+      showToast("Please create a Vendor in backend first.", "error");
+      return;
+    }
+
+    const payload = {
+      vendor: selectedVendorObj._id,
+      items: [{
+        item_name: newEntry.name,
+        quantity: Number(newEntry.qty),
+        unit_price: 1200,
+        total: Number(newEntry.qty) * 1200
+      }],
+      total_amount: Number(newEntry.qty) * 1200,
       status: "Confirmed"
     };
 
-    setPurchaseEntries([created, ...purchaseEntries]);
-    setIsAddOpen(false);
-    
-    // Auto trigger QR In stock addition simulation
-    fetch('/api/inventory/qr-in', {
+    fetch('/api/purchase-orders', {
       method: 'POST',
-      body: JSON.stringify({
-        product_id: "INV001", // Default matching product variant
-        quantity: Number(newEntry.qty),
-        purchase_id: created.id,
-        notes: "Automated arrival from purchase entry"
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          // Auto trigger QR In stock addition simulation
+          fetch('/api/inventory/qr-in', {
+            method: 'POST',
+            body: JSON.stringify({
+              product_id: stock[0]?.id || "INV001", 
+              quantity: Number(newEntry.qty),
+              purchase_id: resData.data?.po_number || `PO-${Date.now()}`,
+              notes: "Automated arrival from purchase entry"
+            })
+          }).then(() => {
+            showToast(`Purchase order saved and stock levels updated (+${newEntry.qty} pairs).`, "success");
+            loadPurchaseData();
+            setIsAddOpen(false);
+            setNewEntry({ sku: '', name: '', article_no: '', colour: '', qty: '', vendor: vendors[0]?.name || '' });
+          });
+        } else {
+          showToast(resData.message || "Failed to create purchase order.", "error");
+        }
       })
-    }).then(res => res.json())
-      .then(data => {
-        showToast(`Purchase order saved and stock levels updated (+${newEntry.qty} pairs).`, "success");
-        setNewEntry({ sku: '', name: '', article_no: '', colour: '', qty: '', vendor: 'Standard Sole Manufacturers' });
-      })
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        showToast("Error connecting to database.", "error");
+      });
   };
 
   // QR Stock In / Out Submit
@@ -157,16 +250,10 @@ export default function Purchase({ showToast }) {
         return data;
       })
       .then(data => {
-        // Sync local stock representation
-        const targetItem = stock.find(item => item.id === qrForm.product_id);
-        const newLevel = qrMovementType === 'IN' 
-          ? targetItem.stockLevel + Number(qrForm.quantity)
-          : targetItem.stockLevel - Number(qrForm.quantity);
-          
-        setStock(stock.map(s => s.id === qrForm.product_id ? { ...s, stockLevel: newLevel } : s));
+        showToast(`QR Stock ${qrMovementType} recorded successfully.`, "success");
         setIsQrMovementOpen(false);
         setQrForm({ product_id: stock[0]?.id || '', quantity: '', reference_id: '', notes: '' });
-        showToast(`QR Stock ${qrMovementType} recorded successfully. Updated stock: ${newLevel} pairs.`, "success");
+        loadPurchaseData();
       })
       .catch(err => {
         showToast(err.message, "error");
@@ -179,13 +266,10 @@ export default function Purchase({ showToast }) {
     let html5QrcodeScanner = null;
     if (isScanOpen && scannerTab === 'camera') {
       const onScanSuccess = (decodedText, decodedResult) => {
-        console.log(`Scan result: ${decodedText}`, decodedResult);
         handleBarcodeMatch(decodedText);
       };
       
-      const onScanFailure = (error) => {
-        // quiet fail
-      };
+      const onScanFailure = (error) => {};
 
       html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
       html5QrcodeScanner.render(onScanSuccess, onScanFailure);
@@ -199,8 +283,6 @@ export default function Purchase({ showToast }) {
   }, [isScanOpen, scannerTab]);
 
   const handleBarcodeMatch = (code) => {
-    // Match against our products database
-    // We match by product's SKU or Article No
     const matched = productsList.find(p => p.sku === code || p.article_no === code || p.name.toLowerCase().includes(code.toLowerCase()));
     
     if (matched) {
@@ -238,6 +320,10 @@ export default function Purchase({ showToast }) {
     )}
   ];
 
+  // Compute stats dynamically
+  const totalPurchases = purchaseEntries.reduce((sum, po) => sum + po.qty, 0);
+  const totalSkus = stock.length;
+
   return (
     <div className="space-y-6">
       {/* Metrics Banner */}
@@ -248,54 +334,57 @@ export default function Purchase({ showToast }) {
           </span>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Purchases (This Month)</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">450 Pairs</h3>
+            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">{totalPurchases} Pairs</h3>
           </div>
         </div>
+
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
           <span className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
             <QrCode className="w-6 h-6" />
           </span>
           <div>
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">QR Inbound Audits</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">14 Successful</h3>
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Tracked Inventory SKUs</span>
+            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">{totalSkus} Active Styles</h3>
           </div>
         </div>
+
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex items-center gap-4">
           <span className="p-3 bg-orange-50 text-brand-orange rounded-xl border border-orange-100">
-            <ShieldCheck className="w-6 h-6" />
+            <Scan className="w-6 h-6" />
           </span>
           <div>
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Quality Verified Tiers</span>
-            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">100% Passed</h3>
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Quality Checks Done</span>
+            <h3 className="text-xl font-bold text-slate-800 font-display mt-0.5">100% Verified</h3>
           </div>
         </div>
       </div>
 
-      {/* Header controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-200 pt-6">
-        <div>
-          <h1 className="text-lg font-bold text-slate-900 font-display">Purchase & Inbound Operations</h1>
-          <p className="text-xs text-slate-500 font-semibold">Track vendor wholesale deliveries, generate printable Code128 barcode stickers, and scan product credentials.</p>
-        </div>
-        <div className="flex gap-2 self-start">
-          <button 
-            onClick={() => { setQrMovementType('IN'); setIsQrMovementOpen(true); }}
-            className="px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white transition-colors"
-          >
-            QR Stock Inbound (In)
-          </button>
-          <button 
-            onClick={() => { setQrMovementType('OUT'); setIsQrMovementOpen(true); }}
-            className="px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white transition-colors"
-          >
-            QR Stock Outbound (Out)
-          </button>
+      {/* Control bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex gap-2">
           <button 
             onClick={() => setIsAddOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
             <span>Create Purchase Entry</span>
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button 
+            onClick={() => { setQrMovementType('IN'); setIsQrMovementOpen(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+          >
+            <QrCode className="w-4 h-4 text-emerald-600" />
+            <span>QR Stock IN</span>
+          </button>
+          <button 
+            onClick={() => { setQrMovementType('OUT'); setIsQrMovementOpen(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+          >
+            <QrCode className="w-4 h-4 text-rose-600" />
+            <span>QR Stock OUT</span>
           </button>
         </div>
       </div>
@@ -315,7 +404,7 @@ export default function Purchase({ showToast }) {
         title="Create Purchase Entry"
         onConfirm={handleAddSubmit}
       >
-        <form className="space-y-4">
+        <form className="space-y-4 text-left">
           <div className="relative">
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product SKU / Barcode *</label>
             <div className="flex gap-2">
@@ -393,9 +482,17 @@ export default function Purchase({ showToast }) {
               onChange={(e) => setNewEntry({...newEntry, vendor: e.target.value})}
               className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none"
             >
-              <option value="Standard Sole Manufacturers">Standard Sole Manufacturers</option>
-              <option value="Comfort Rubber Ltd">Comfort Rubber Ltd</option>
-              <option value="Derby Leather Tannery">Derby Leather Tannery</option>
+              {vendors.length === 0 ? (
+                <>
+                  <option value="Standard Sole Manufacturers">Standard Sole Manufacturers</option>
+                  <option value="Comfort Rubber Ltd">Comfort Rubber Ltd</option>
+                  <option value="Derby Leather Tannery">Derby Leather Tannery</option>
+                </>
+              ) : (
+                vendors.map(v => (
+                  <option key={v._id} value={v.name}>{v.name}</option>
+                ))
+              )}
             </select>
           </div>
         </form>
@@ -405,7 +502,7 @@ export default function Purchase({ showToast }) {
       <Modal
         isOpen={isScanOpen}
         onClose={() => setIsScanOpen(false)}
-        title="Mobile Barcode Scanner (Phase 2)"
+        title="Mobile Barcode Scanner"
       >
         <div className="space-y-4">
           <div className="flex border-b border-slate-200 p-0.5 bg-slate-100 rounded-lg">
@@ -432,72 +529,71 @@ export default function Purchase({ showToast }) {
                 <p>Select a product to simulate a barcode camera scan on your desktop or simulator environment.</p>
               </div>
               <div className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
-                {productsList.map(prod => (
-                  <button 
-                    key={prod.id}
-                    type="button"
-                    onClick={() => handleBarcodeMatch(prod.sku)}
-                    className="w-full p-2.5 text-left text-xs hover:bg-slate-50 flex items-center justify-between font-semibold"
-                  >
-                    <span className="text-slate-800">{prod.name} ({prod.colour})</span>
-                    <code className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-500 font-mono">{prod.sku}</code>
-                  </button>
-                ))}
+                {productsList.length === 0 ? (
+                  <div className="p-4 text-center text-slate-400 text-xs">No products in database.</div>
+                ) : (
+                  productsList.map(prod => (
+                    <button 
+                      key={prod.id}
+                      type="button"
+                      onClick={() => handleBarcodeMatch(prod.sku)}
+                      className="w-full p-2.5 text-left text-xs hover:bg-slate-50 flex items-center justify-between font-semibold"
+                    >
+                      <span className="text-slate-800">{prod.name} ({prod.colour})</span>
+                      <code className="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-500 font-mono">{prod.sku}</code>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           ) : (
             <div className="space-y-4 flex flex-col items-center">
               <div id="reader" className="w-full bg-slate-50 rounded-lg overflow-hidden border border-slate-200"></div>
-              <p className="text-[10px] text-slate-400 font-bold">Please allow camera permissions when requested by Vite dev server.</p>
             </div>
           )}
         </div>
       </Modal>
 
-      {/* QR Stock In / Out Modal */}
+      {/* QR Code movement entry Modal */}
       <Modal
         isOpen={isQrMovementOpen}
         onClose={() => setIsQrMovementOpen(false)}
-        title={`QR Stock Movement — QR ${qrMovementType}`}
+        title={`QR Stock Movement - ${qrMovementType}`}
         onConfirm={handleQrMovementSubmit}
       >
-        <form className="space-y-4">
+        <form className="space-y-4 text-left">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Footwear Product variant *</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Inventory SKU *</label>
             <select
               value={qrForm.product_id}
-              onChange={(e) => setQrForm({ ...qrForm, product_id: e.target.value })}
+              onChange={(e) => setQrForm({...qrForm, product_id: e.target.value})}
               className="w-full text-sm border border-slate-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none"
             >
               {stock.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name} (SKU: {item.sku}, Size: {item.size}, Color: {item.color}) — Current stock: {item.stockLevel}
-                </option>
+                <option key={item.id} value={item.id}>{item.sku} — {item.warehouse} (Current: {item.stockLevel} pairs)</option>
               ))}
             </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity (Pairs) *</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity Received *</label>
               <input 
                 type="number" 
-                placeholder="e.g. 25"
+                placeholder="Pairs Count" 
                 value={qrForm.quantity}
-                onChange={(e) => setQrForm({ ...qrForm, quantity: e.target.value })}
+                onChange={(e) => setQrForm({...qrForm, quantity: e.target.value})}
                 className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none bg-white text-slate-800"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                {qrMovementType === 'IN' ? 'Purchase Order Ref' : 'Dispatched Ref'}
-              </label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reference ID (e.g., PO No.)</label>
               <input 
                 type="text" 
-                placeholder="e.g. PO-2026-001"
+                placeholder="e.g. PO-2026-001" 
                 value={qrForm.reference_id}
-                onChange={(e) => setQrForm({ ...qrForm, reference_id: e.target.value })}
+                onChange={(e) => setQrForm({...qrForm, reference_id: e.target.value})}
                 className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none bg-white text-slate-800"
               />
             </div>
@@ -506,15 +602,16 @@ export default function Purchase({ showToast }) {
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Audit Notes / Comments</label>
             <textarea 
-              rows="2" 
-              placeholder="e.g. Returned due to minor packaging tears."
+              rows="3" 
+              placeholder="Comments on stock movement..."
               value={qrForm.notes}
-              onChange={(e) => setQrForm({ ...qrForm, notes: e.target.value })}
-              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none bg-white text-slate-800"
+              onChange={(e) => setQrForm({...qrForm, notes: e.target.value})}
+              className="w-full text-sm border border-slate-200 rounded-lg p-2.5 focus:outline-none"
             />
           </div>
         </form>
       </Modal>
+
     </div>
   );
 }

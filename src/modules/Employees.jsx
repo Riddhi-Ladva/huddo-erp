@@ -1,11 +1,48 @@
 import React, { useState } from 'react';
-import { User, ShieldAlert, Plus, Grid, List, Eye, Settings, Briefcase, FileText, CheckCircle2, ChevronRight, UserCheck } from 'lucide-react';
+import { User, ShieldAlert, Plus, Grid, List, Eye, Settings, Briefcase, FileText, CheckCircle2, ChevronRight, UserCheck, X } from 'lucide-react';
 import { initialEmployees } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export default function Employees({ showToast }) {
-  const [employees, setEmployees] = useState(initialEmployees);
+  const [employees, setEmployees] = useState([]);
+
+  React.useEffect(() => {
+    fetch('/api/employees')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success && Array.isArray(resData.data)) {
+          const mapped = resData.data.map(emp => ({
+            id: emp.employee_code || emp._id,
+            name: emp.full_name,
+            avatar: emp.profile_photo || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+            email: emp.email,
+            mobile: emp.mobile,
+            department: emp.department?.name || emp.department || "Sales",
+            designation: emp.designation?.title || emp.designation || "Sales Executive",
+            manager: emp.reporting_manager?.full_name || emp.reporting_manager || "Sanjay Joshi",
+            joiningDate: emp.joining_date ? new Date(emp.joining_date).toISOString().split('T')[0] : "2024-01-15",
+            status: emp.is_active ? "Active" : "Inactive",
+            personalInfo: { address: emp.residential_address, aadhaar: emp.aadhaar_number, pan: emp.pan_number },
+            jobInfo: { salary: `₹${emp.salary_structure?.basic?.toLocaleString('en-IN') || '45,000'} / month` },
+            bankInfo: { bankName: emp.bank_details?.bank_name, accountNo: emp.bank_details?.account_no, ifsc: emp.bank_details?.ifsc },
+            performance: [ { month: "Apr", target: 500000, achieved: 450000 } ],
+            history: [ { date: emp.joining_date ? new Date(emp.joining_date).toISOString().split('T')[0] : "2024-01-15", event: "Joined Huddo Shoes distribution network." } ]
+          }));
+          setEmployees(mapped);
+        } else if (Array.isArray(resData)) {
+          // Handle direct array returns if any
+          setEmployees(resData);
+        } else {
+          setEmployees(initialEmployees);
+        }
+      })
+      .catch(err => {
+        console.error("Error loading employees from database, falling back to mock data:", err);
+        setEmployees(initialEmployees);
+      });
+  }, []);
+
   const [filterDept, setFilterDept] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
 
@@ -48,6 +85,30 @@ export default function Employees({ showToast }) {
       performance: [ { month: "Apr", target: 500000, achieved: 450000 } ],
       history: [ { date: newEmp.joiningDate, event: "Joined Huddo Shoes distribution network." } ]
     };
+
+    // Save to real backend database asynchronously
+    fetch('/api/employees', {
+      method: 'POST',
+      body: JSON.stringify({
+        full_name: newEmp.name,
+        email: newEmp.email,
+        mobile: newEmp.mobile,
+        employee_code: createdEmp.id,
+        joining_date: newEmp.joiningDate,
+        residential_address: newEmp.address,
+        aadhaar_number: newEmp.aadhaar,
+        pan_number: newEmp.pan,
+        bank_details: { bank_name: newEmp.bankName, account_no: newEmp.accountNo, ifsc: newEmp.ifsc },
+        department: newEmp.department,
+        designation: newEmp.designation,
+        is_active: true
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log("[Seeder] New employee saved to MongoDB:", data);
+    })
+    .catch(err => console.error("Failed to save employee to database:", err));
 
     setEmployees([...employees, createdEmp]);
     setIsAddOpen(false);
@@ -302,7 +363,7 @@ export default function Employees({ showToast }) {
                 onClick={() => setViewingEmp(null)}
                 className="ml-auto p-1.5 hover:bg-slate-200 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
               >
-                <XSquare className="w-6 h-6" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
@@ -372,7 +433,7 @@ export default function Employees({ showToast }) {
                   <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Targets vs Achieved (Last Quarter)</h4>
                   <div className="h-56">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={viewingEmp.performance} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                      <BarChart data={viewingEmp.performance} margin={{ top: 5, right: 5, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="month" fontSize={11} stroke="#94a3b8" />
                         <YAxis fontSize={11} stroke="#94a3b8" />
@@ -422,14 +483,5 @@ export default function Employees({ showToast }) {
       </Modal>
 
     </div>
-  );
-}
-
-// Add simple close button mapping
-function XSquare({ className, ...props }) {
-  return (
-    <button {...props} className={className}>
-      <X className="w-full h-full" />
-    </button>
   );
 }
