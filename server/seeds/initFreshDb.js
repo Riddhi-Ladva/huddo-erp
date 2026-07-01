@@ -247,20 +247,11 @@ const seedFreshDatabase = async () => {
     rolesMap['HR Manager'] = rolesMap['HRManager'];
     rolesMap['Team Member'] = rolesMap['TeamMember'];
 
-    // 3. Seed Core Default Users (Rohan, Rajesh, Preeti, Sanjay, Vikram, Neha, Sunil, Arjun, Suresh, Dinesh)
+    // 3. Seed Core Default Users
     console.log('[InitFreshDB] Seeding default system users...');
     const usersMap = {};
     const defaultUsers = [
-      { name: "Rohan Hudda", email: "rohan@huddoerp.in", mobile: "9876543210", roleName: "Founder", password: "password123" },
-      { name: "Rajesh Sharma", email: "rajesh@huddoerp.in", mobile: "9812345678", roleName: "Country Manager", password: "password123" },
-      { name: "Preeti Verma", email: "preeti@huddoerp.in", mobile: "9988776655", roleName: "State Manager", password: "password123" },
-      { name: "Sanjay Joshi", email: "sanjay@huddoerp.in", mobile: "9560412345", roleName: "City Manager", password: "password123" },
-      { name: "Vikram Malhotra", email: "vikram@huddoerp.in", mobile: "9123456789", roleName: "Finance Manager", password: "password123" },
-      { name: "Neha Sen", email: "neha@huddoerp.in", mobile: "9001122334", roleName: "HR Manager", password: "password123" },
-      { name: "Sunil Mehta", email: "sunil@huddoerp.in", mobile: "9777888999", roleName: "Inventory Manager", password: "password123" },
-      { name: "Arjun Dev", email: "arjun@huddoerp.in", mobile: "8889990001", roleName: "Sales Executive", password: "password123" },
-      { name: "Suresh Raina", email: "suresh@promoter.com", mobile: "9820129034", roleName: "Promoter", password: "password123" },
-      { name: "Walk Easy Footwear", email: "dinesh@walkeasy.in", mobile: "9821012345", roleName: "Retailer", password: "password123" }
+      { name: "Rohan Hudda", email: "rohan@huddoerp.in", mobile: "9876543210", roleName: "Founder", password: "password123" }
     ];
 
     for (const u of defaultUsers) {
@@ -277,41 +268,15 @@ const seedFreshDatabase = async () => {
       usersMap[u.name] = dbUser;
     }
 
-    // 4. Seed Core Geography (Base references for managers)
-    console.log('[InitFreshDB] Seeding core geography...');
-    const india = new Country({
-      name: 'India',
-      code: 'IN',
-      manager: usersMap['Rajesh Sharma']?._id,
-      is_active: true
-    });
-    await india.save();
-
-    const maharashtra = new State({
-      name: "Maharashtra",
-      country: india._id,
-      manager: usersMap['Preeti Verma']?._id,
-      is_active: true
-    });
-    await maharashtra.save();
-
-    const mumbai = new City({
-      name: "Mumbai",
-      state: maharashtra._id,
-      manager: usersMap['Sanjay Joshi']?._id,
-      is_active: true
-    });
-    await mumbai.save();
-
-    // 5. Seed Core Departments & Designations
+    // 4. Seed Core Departments & Designations
     console.log('[InitFreshDB] Seeding departments & designations...');
     const depts = [
-      { name: "Sales", code: "SLS", head: "Rajesh Sharma" },
-      { name: "Finance", code: "FIN", head: "Vikram Malhotra" },
-      { name: "HR", code: "HRM", head: "Neha Sen" },
-      { name: "Inventory", code: "INV", head: "Sunil Mehta" },
-      { name: "Purchase", code: "PUR", head: "Rohan Hudda" },
-      { name: "Marketing", code: "MKT", head: "Rohan Hudda" }
+      { name: "Sales", code: "SLS", head: null },
+      { name: "Finance", code: "FIN", head: null },
+      { name: "HR", code: "HRM", head: null },
+      { name: "Inventory", code: "INV", head: null },
+      { name: "Purchase", code: "PUR", head: usersMap['Rohan Hudda']?._id },
+      { name: "Marketing", code: "MKT", head: usersMap['Rohan Hudda']?._id }
     ];
 
     const deptDocs = {};
@@ -319,7 +284,7 @@ const seedFreshDatabase = async () => {
       const deptDoc = new Department({
         name: d.name,
         code: d.code,
-        head: usersMap[d.head]?._id,
+        head: d.head,
         features: { "View": true },
         is_active: true
       });
@@ -346,38 +311,6 @@ const seedFreshDatabase = async () => {
       await desDoc.save();
       desDocs[dg.title] = desDoc;
     }
-
-    // 6. Seed default Promoter and Retailer profiles linked to their user records
-    console.log('[InitFreshDB] Seeding default promoter and retailer profiles...');
-    const sureshPromoter = new Promoter({
-      user: usersMap['Suresh Raina']?._id,
-      promoter_code: 'HUDDOPR01',
-      name: 'Suresh Raina',
-      full_name: 'Suresh Raina',
-      mobile: '9820129034',
-      email: 'suresh@promoter.com',
-      royalty_percentage: 5.0,
-      total_royalty_earned: 0,
-      is_active: true
-    });
-    await sureshPromoter.save();
-
-    const walkEasyRetailer = new Retailer({
-      user: usersMap['Walk Easy Footwear']?._id,
-      business_name: 'Walk Easy Footwear',
-      owner_name: 'Dinesh Shah',
-      mobile: '9821012345',
-      email: 'dinesh@walkeasy.in',
-      state: maharashtra._id,
-      city: mumbai._id,
-      category: 'Platinum',
-      assigned_promoter: sureshPromoter._id,
-      assigned_city_manager: usersMap['Sanjay Joshi']?._id,
-      credit_limit: { amount: 500000, is_enabled: true },
-      is_verified: true,
-      is_active: true
-    });
-    await walkEasyRetailer.save();
 
     // 7. Seed Settings & Communication Templates (necessary for login, OTP, and workflow notifications)
     console.log('[InitFreshDB] Seeding core settings & communication configurations...');
