@@ -253,7 +253,8 @@ window.fetch = async function (input, init) {
   // BACKEND REDIRECT BRIDGE
   // ────────────────────────────────────────────────────────────────────────
   try {
-    const backendUrl = `http://localhost:5000${url.replace(/^\/api/, '/api/v1')}`;
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const backendUrl = `${apiBaseUrl}${url.replace(/^\/api/, '/api/v1')}`;
     const headers = { ...(init && init.headers) };
     
     // Auto-set content type for JSON if body is present and not form-data
