@@ -127,11 +127,13 @@ import Lead from '../models/Lead.js';
 import ReturnLog from '../models/ReturnLog.js';
 import Upload from '../models/Upload.js';
 import countryManagerRouter from './countryManagerRouter.js';
+import promoterRouter from './promoterRouter.js';
 
 const router = express.Router();
 
 // Mount Country Manager routes
 router.use('/country-managers', countryManagerRouter);
+router.use('/promoters', promoterRouter);
 
 // ==========================================
 // 1. AUTHENTICATION ROUTES
@@ -321,7 +323,6 @@ const modules = [
   { path: 'states', model: State, populate: ['country', 'manager'] },
   { path: 'cities', model: City, populate: ['state', 'manager'] },
   { path: 'employees', model: Employee, populate: ['user', 'department', 'designation', 'reporting_manager'] },
-  { path: 'promoters', model: Promoter, populate: ['user', 'territory', 'retailers'] },
   { path: 'retailers', model: Retailer, populate: ['user', 'state', 'city', 'assigned_promoter', 'assigned_city_manager'] },
   { path: 'product-categories', model: ProductCategory },
   { path: 'product-variants', model: ProductVariant, populate: ['product'] },
