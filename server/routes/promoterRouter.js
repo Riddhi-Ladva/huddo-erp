@@ -69,12 +69,7 @@ router.get('/analytics', verifyJWT, async (req, res, next) => {
       });
     }
     
-    if (performers.length === 0) {
-      performers.push(
-        { promoter_id: "1", promoter_code: "PRO-2026-001", full_name: "Suresh Raina", retailers: 2, revenue: 85000, royalty_earned: 4250, royalty_paid: 0, status: "Active" },
-        { promoter_id: "2", promoter_code: "PRO-2026-002", full_name: "Harbhajan Singh", retailers: 1, revenue: 124000, royalty_earned: 6200, royalty_paid: 6200, status: "Active" }
-      );
-    }
+    // No mock fallback for top performers
     
     res.status(200).json({
       total_promoters: total_promoters || 2,
@@ -189,12 +184,7 @@ router.get('/', verifyJWT, async (req, res, next) => {
       });
     }
     
-    if (enrichedList.length === 0) {
-      enrichedList.push(
-        { promoter_id: "1", promoter_code: "PRO-2026-001", full_name: "Suresh Raina", mobile_number: "9876543210", email: "suresh@raina.com", status: "Active", payment_status: "Unpaid", verification_status: "Verified", total_retailers_mapped: 2, current_month_revenue: 85000, total_royalty_earned: 4250, pending_royalty: 4250, created_at: new Date() },
-        { promoter_id: "2", promoter_code: "PRO-2026-002", full_name: "Harbhajan Singh", mobile_number: "8765432109", email: "harbhajan@singh.com", status: "Active", payment_status: "Paid", verification_status: "Verified", total_retailers_mapped: 1, current_month_revenue: 124000, total_royalty_earned: 6200, pending_royalty: 0, created_at: new Date() }
-      );
-    }
+    // No mock fallback for promoters list
     
     res.status(200).json({
       data: enrichedList,

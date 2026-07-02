@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { Award, Plus, Eye, DollarSign, Edit, Save, Trash, UserCheck, ShieldAlert } from 'lucide-react';
-import { initialPromoters, initialRoyaltyConfig } from '../mockData';
+import React, { useState, useEffect } from 'react';
+import { Award, Plus, Eye, DollarSign, Edit, Save, Trash, UserCheck, ShieldAlert, X } from 'lucide-react';
+import { initialRoyaltyConfig } from '../mockData';
 import { DataTable, Modal } from '../components/Common';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export default function Promoters({ showToast }) {
-  const [promoters, setPromoters] = useState(initialPromoters);
+  const [promoters, setPromoters] = useState([]);
   const [royaltyConfig, setRoyaltyConfig] = useState(initialRoyaltyConfig);
 
   // Modals state
@@ -21,11 +21,67 @@ export default function Promoters({ showToast }) {
   const [billingPage, setBillingPage] = useState(1);
   const itemsPerBillingPage = 5;
 
+  const loadPromoters = () => {
+    fetch('/api/promoters')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success !== false && resData.data && Array.isArray(resData.data)) {
+          setPromoters(resData.data.map(p => ({
+            id: p.promoter_id || p._id,
+            name: p.full_name || p.name,
+            code: p.promoter_code,
+            mobile: p.mobile_number || p.mobile,
+            email: p.email,
+            cities: p.cities || [],
+            retailersAdded: p.total_retailers_mapped || 0,
+            revenue: p.current_month_revenue || 0,
+            royaltyEarned: p.total_royalty_earned || 0,
+            royaltyPending: p.pending_royalty || 0,
+            royaltySettled: (p.total_royalty_earned || 0) - (p.pending_royalty || 0),
+            status: p.status || 'Active'
+          })));
+        } else if (Array.isArray(resData)) {
+          setPromoters(resData.map(p => ({
+            id: p._id,
+            name: p.name,
+            code: p.promoter_code,
+            mobile: p.mobile,
+            email: p.email,
+            cities: [],
+            retailersAdded: p.retailers?.length || 0,
+            revenue: 0,
+            royaltyEarned: p.total_royalty_earned || 0,
+            royaltyPending: 0,
+            royaltySettled: p.total_royalty_earned || 0,
+            status: p.is_active ? 'Active' : 'Inactive'
+          })));
+        }
+      })
+      .catch(err => console.error("Error loading promoters:", err));
+  };
+
+  useEffect(() => {
+    loadPromoters();
+  }, []);
+
   useEffect(() => {
     if (viewingPromoter) {
-      fetch(`/api/promoters/${viewingPromoter.name}/revenue-billings`)
+      fetch(`/api/promoters/${viewingPromoter.id}/revenue`)
         .then(res => res.json())
-        .then(data => setRevenueBillings(data))
+        .then(resData => {
+          if (resData && Array.isArray(resData.revenue_list)) {
+            setRevenueBillings(resData.revenue_list.map(bill => ({
+              id: bill.invoice_number || bill.id || bill._id,
+              date: bill.invoice_date || bill.synced_at,
+              shopName: bill.retailer_name,
+              city: bill.retailer_city || 'Mumbai',
+              total: bill.invoice_amount || bill.total_amount,
+              status: bill.payment_status
+            })));
+          } else {
+            setRevenueBillings([]);
+          }
+        })
         .catch(err => console.error("Error loading promoter revenue billings", err));
     } else {
       setRevenueBillings([]);
@@ -46,28 +102,44 @@ export default function Promoters({ showToast }) {
       return;
     }
 
-    const codeId = `HUDDOPR${String(promoters.length + 1).padStart(2, '0')}`;
-    const newPromoter = {
-      id: `PR0${promoters.length + 1}`,
-      name: formData.name,
-      code: codeId,
-      mobile: formData.mobile,
-      cities: formData.cities.length > 0 ? formData.cities : ["Mumbai"],
-      retailersAdded: 0,
-      revenue: 0,
-      royaltyEarned: 0,
-      royaltyPending: 0,
-      royaltySettled: 0,
-      status: "Active"
+    const payload = {
+      full_name: formData.name,
+      mobile_number: formData.mobile,
+      email: formData.email,
+      address: formData.address,
+      profile_photo_url: '',
+      aadhaar_number: formData.aadhaar,
+      pan_number: formData.pan,
+      gst_number: formData.gst,
+      bank_account_number: formData.accountNo,
+      bank_ifsc: formData.ifsc,
+      bank_name: formData.bankName,
+      royalty_percentage: 5.0
     };
 
-    setPromoters([...promoters, newPromoter]);
-    setIsAddOpen(false);
-    setFormData({
-      name: '', mobile: '', email: '', address: '', aadhaar: '', pan: '', gst: '',
-      bankName: '', accountNo: '', ifsc: '', cities: []
-    });
-    showToast(`Promoter "${newPromoter.name}" registered under code: ${codeId}.`, "success");
+    fetch('/api/promoters/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          showToast(`Promoter "${formData.name}" registered successfully with code ${resData.promoter_code}.`, "success");
+          setIsAddOpen(false);
+          setFormData({
+            name: '', mobile: '', email: '', address: '', aadhaar: '', pan: '', gst: '',
+            bankName: '', accountNo: '', ifsc: '', cities: []
+          });
+          loadPromoters();
+        } else {
+          showToast(resData.message || "Registration failed.", "error");
+        }
+      })
+      .catch(err => {
+        console.error("Error registering promoter:", err);
+        showToast("Error registering promoter.", "error");
+      });
   };
 
   const handleUpdateRoyaltyPercent = (productId, newPercent) => {
@@ -119,8 +191,25 @@ export default function Promoters({ showToast }) {
         </button>
         <button 
           onClick={() => {
-            setPromoters(promoters.map(p => p.id === val ? { ...p, status: p.status === 'Active' ? 'Inactive' : 'Active' } : p));
-            showToast(`Status toggled for ${row.name}`, "success");
+            const nextStatus = row.status === 'Active' ? 'Inactive' : 'Active';
+            fetch(`/api/promoters/${row.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ is_active: nextStatus === 'Active' })
+            })
+              .then(res => res.json())
+              .then(resData => {
+                if (resData.updated) {
+                  showToast(`Status toggled for ${row.name}`, "success");
+                  loadPromoters();
+                } else {
+                  showToast(resData.message || "Failed to toggle status.", "error");
+                }
+              })
+              .catch(err => {
+                console.error("Error toggling status:", err);
+                showToast("Failed to toggle status.", "error");
+              });
           }}
           className="text-xs font-semibold text-brand-orange hover:underline"
         >
